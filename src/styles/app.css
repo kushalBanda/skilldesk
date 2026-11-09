@@ -1,0 +1,281 @@
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource/fragment-mono/400.css";
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Tailwind reads DESIGN.md tokens only: default palette and radii are cleared
+   so classes cannot invent colours or radii (ADR 0002). */
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-panel: var(--panel);
+  --color-sunk: var(--sunk);
+  --color-rule: var(--rule);
+  --color-rule-2: var(--rule-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn-text: var(--warn-text);
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+
+  --radius-*: initial;
+  --radius-input: 8px;
+  --radius-row: 12px;
+  --radius-card: 16px;
+  --radius-panel: 24px;
+
+  --font-*: initial;
+  --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
+  --font-mono: "Fragment Mono", ui-monospace, monospace;
+
+  --shadow-*: initial;
+  --shadow-card: var(--shadow);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Desktop app: chrome text is not selectable; documents, paths and inputs are. */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+.selectable,
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+::selection {
+  background: var(--mark);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard paths: one visible ring, only for keyboard focus. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  input:focus-visible,
+  textarea:focus-visible {
+    outline-offset: 0;
+  }
+}
+
+/* Motion (DESIGN.md §5). Sheet: in from the right, out to the right, 240ms.
+   ⌘K and confirm dialogs: dim scrim, panel scales from 0.98. */
+@keyframes sheet-in {
+  from { transform: translateX(24px); opacity: 0; }
+}
+@keyframes sheet-out {
+  to { transform: translateX(24px); opacity: 0; }
+}
+@keyframes pop-in {
+  from { transform: scale(0.98); opacity: 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+.sheet-in { animation: sheet-in 240ms var(--ease); }
+.sheet-out { animation: sheet-out 180ms var(--ease) forwards; }
+.palette-in { animation: pop-in 180ms var(--ease); transform-origin: 50% 0; }
+.scrim {
+  background: var(--scrim);
+  animation: fade-in 180ms var(--ease);
+}
+
+/* Translucent layer (⌘K): blur and saturate what is under it. */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Reduced motion: no slides or scales, cross-fade only. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+  *:not([data-motion]),
+  *:not([data-motion])::before,
+  *:not([data-motion])::after {
+    animation-duration: 0.01ms !important;
+  }
+  .sheet-in,
+  .palette-in { animation: fade-in 180ms linear; }
+  .sheet-out { animation: fade-out 120ms linear forwards; }
+}
+
+/* Reduced transparency: solid surfaces. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+:root[data-transparency="reduce"] .glass {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Rendered SKILL.md: document typography, not UI chrome. */
+.skill-md h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; margin: 16px 0 8px; }
+.skill-md h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin: 16px 0 8px; }
+.skill-md h3 { font-size: 15px; font-weight: 600; margin: 12px 0 6px; }
+.skill-md p, .skill-md ul, .skill-md ol { margin: 8px 0; color: var(--ink-2); }
+.skill-md ul, .skill-md ol { padding-left: 20px; }
+.skill-md code { font-family: var(--font-mono); font-size: 12.5px; background: var(--sunk); border-radius: 6px; padding: 1px 5px; }
+.skill-md pre { background: var(--sunk); border-radius: 12px; padding: 12px; overflow: auto; }
+.skill-md pre code { background: none; padding: 0; }
+.skill-md a { color: var(--accent-text); }
+.skill-md table { border-collapse: collapse; font-size: 13px; }
+.skill-md th, .skill-md td { border-top: 1px solid var(--rule-2); padding: 4px 8px; text-align: left; }
+
+/* Agent marks fill their box (AgentLogo). */
+.agent-logo > svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Sidebar: scrolls on short windows, never draws a scrollbar. */
+.scroll-quiet {
+  scrollbar-width: none;
+}
+.scroll-quiet::-webkit-scrollbar {
+  display: none;
+}
+
+/* Menus grow from their trigger (top left). */
+@keyframes menu-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+}
+.menu-in {
+  transform-origin: 16px 0;
+  animation: menu-in 160ms var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-in { animation: fade-in 120ms linear; }
+}
+
+/* List tables: rows highlight edge to edge, so the first and last cells keep
+   their text off the edge of the hover / selected fill. */
+main table:not(.skill-md table) > * > tr > :first-child { padding-left: 16px; }
+main table:not(.skill-md table) > * > tr > :last-child { padding-right: 16px; }
+
+/* Undo toast: rises in, sinks out; the hairline is the time left for Undo
+   and stops while the pointer is on the toast. */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(10px) scale(0.98); }
+}
+@keyframes toast-clock {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+.toast-in { animation: toast-in 280ms var(--ease); }
+.toast-out { animation: toast-out 180ms var(--ease) forwards; }
+.toast-clock { animation: toast-clock 10s linear forwards; }
+[role="status"]:hover > .toast-clock { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .toast-in { animation: fade-in 160ms linear; }
+  .toast-out { animation: fade-out 120ms linear forwards; }
+}
+
+/* The pill that carries a trashed row to History in the sidebar. */
+.fly-pill {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  height: 28px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  will-change: transform, opacity;
+}
+
+/* Every screen: the same side gutter and the same content width, full screen
+   or small. The gutter narrows with the window; content stops at 1680px. */
+.page {
+  padding-inline: clamp(20px, 3vw, 40px);
+  padding-bottom: 40px;
+}
+.page > * {
+  max-width: 1680px;
+}
+
+/* Number strip: tiles flow into as many columns as fit (min 200px), so a
+   full-screen window shows one row and a narrow one wraps without empty
+   cells. Hairlines sit on each tile's top and left edge; the strip clips
+   the outer ones. */
+.stat-tiles { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.stat-tiles > * { box-shadow: -1px 0 0 var(--rule-2), 0 -1px 0 var(--rule-2); }
+
+/* Tables: the header stays in view while the list scrolls, over a soft
+   material so rows read through it. */
+main table:not(.skill-md table) > thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 -1px 0 var(--rule);
+}
+:root[data-transparency="reduce"] main table > thead > tr > th { background: var(--bg); backdrop-filter: none; }
+/* Group header rows (agent, owner, project): a quiet band above their rows. */
+main tr.group-row > th { padding-top: 16px; padding-bottom: 2px; }
+/* Child rows of a cluster: indented under their parent. */
+main table tr.sub-row > td:first-child { padding-left: 44px; }
+
+/* Column edges show while the pointer is over a table's header row, so every
+   resize grip can be found, not only the one under the pointer. */
+thead:hover .col-grip > i:not(.bg-accent) { background-color: var(--rule); }
+/* Numbers and dates in a table cell never wrap; a narrow column ends them with "…". */
+main td.tnum { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

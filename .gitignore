@@ -1,2 +1,13 @@
+.impeccable/
+.playwright-mcp/
 docs/*
 DESIGN.md
+PRODUCT.md
+node_modules/
+dist/
+target/
+src-tauri/gen/
+.DS_Store
+*.db
+*.db-wal
+*.db-shm
