@@ -6,4 +6,4 @@ export type SettingsData = {
 /**
  * Found first, then by name.
  */
-agents: Array<AgentSetting>, custom: Array<CustomAgent>, library_dir: string, library_skills: number, };
+agents: Array<AgentSetting>, custom: Array<CustomAgent>, };

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { ipc } from "./client";
 import type { ItemKind } from "./bindings/ItemKind";
+import type { ScanStage } from "./bindings/ScanStage";
 
 export const qk = {
   overview: ["overview"] as const,
@@ -13,6 +14,7 @@ export const qk = {
   secrets: ["secrets"] as const,
   storage: ["storage"] as const,
   scanning: ["scanning"] as const,
+  scanStages: ["scan-stages"] as const,
   wrapped: (year: number | null) => ["wrapped", year] as const,
   settings: ["settings"] as const,
   cli: ["cli"] as const,
@@ -23,9 +25,15 @@ export function useScanning(): boolean {
   return useQuery({ queryKey: qk.scanning, queryFn: () => false, initialData: false, staleTime: Infinity }).data;
 }
 
+/** Stages the running scan has finished, in order (cleared when a scan starts). */
+export function useScanStages(): ScanStage[] {
+  return useQuery({ queryKey: qk.scanStages, queryFn: () => [] as ScanStage[], initialData: [] as ScanStage[], staleTime: Infinity }).data;
+}
+
 export function useStartScan() {
   const client = useQueryClient();
   return () => {
+    client.setQueryData(qk.scanStages, []);
     client.setQueryData(qk.scanning, true);
     ipc.scanStart().catch((err) => {
       client.setQueryData(qk.scanning, false);
@@ -89,7 +97,8 @@ export function useScanOnLaunch(scannedBefore: boolean | undefined) {
     if (scannedBefore) start();
   }, [scannedBefore, start]);
   useEffect(() => {
-    const unlistenProgress = listen<{ done: boolean }>("scan-progress", (e) => {
+    const unlistenProgress = listen<{ stage: ScanStage; done: boolean }>("scan-progress", (e) => {
+      client.setQueryData<ScanStage[]>(qk.scanStages, (prev = []) => (prev.includes(e.payload.stage) ? prev : [...prev, e.payload.stage]));
       if (e.payload.done) client.setQueryData(qk.scanning, false);
     });
     const unlisten = listen<{ kinds: ItemKind[] }>("inventory-changed", (e) => {

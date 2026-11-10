@@ -17,7 +17,7 @@ const SKILL_LIMIT: u64 = 50 * 1024 * 1024;
 const SKILL_FILES: usize = 5_000;
 /// A recursive tree listing (GitHub caps it near 7 MB).
 const TREE_LIMIT: u64 = 16 * 1024 * 1024;
-const SKIP: &[&str] = &[".git", ".DS_Store", crate::library::SIDECAR];
+const SKIP: &[&str] = &[".git", ".DS_Store"];
 
 fn invalid(msg: impl Into<String>) -> AppError {
     AppError::new(ErrorKind::InvalidInput, msg)

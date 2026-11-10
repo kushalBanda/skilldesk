@@ -58,13 +58,12 @@ export function AgentChips({
 }
 
 /** The clash notes shown above the chips. */
-export function ClashNotes({ name, inLibrary, targets, picked, agents }: { name: string; inLibrary: boolean; targets: InstallTarget[]; picked: string[]; agents: AgentSummary[] }) {
+export function ClashNotes({ name, targets, picked, agents }: { name: string; targets: InstallTarget[]; picked: string[]; agents: AgentSummary[] }) {
   const label = (x: InstallTarget) => agentName(agents, x.key);
   const clashes = targets.filter((x) => picked.includes(x.key) && x.existing.kind === "folder");
   const linkClashes = targets.filter((x) => picked.includes(x.key) && x.existing.kind === "link");
   return (
     <>
-      {inLibrary ? <p className="mt-3 rounded-row bg-sunk px-3 py-2 text-[13px] text-warn-text">{t.alreadyInLibrary(name)}</p> : null}
       {clashes.length ? <p className="mt-3 rounded-row bg-sunk px-3 py-2 text-[13px] text-warn-text">{t.clashNote(clashes.map(label).join(", "), name)}</p> : null}
       {linkClashes.length ? <p className="mt-3 rounded-row bg-sunk px-3 py-2 text-[13px] text-ink-2">{t.linkClashNote(linkClashes.map(label).join(", "), name)}</p> : null}
     </>

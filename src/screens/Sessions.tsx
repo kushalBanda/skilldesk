@@ -1,6 +1,7 @@
 import { StatTiles } from "../components/StatTiles";
 import { PageHeader } from "../components/PageHeader";
 import { useSearchParams } from "react-router-dom";
+import { PathLink } from "../components/PlaceLink";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ipc } from "../ipc/client";
@@ -45,11 +46,15 @@ export function Sessions() {
   const all = q.data ?? [];
   const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
-  const [agent, setAgent] = useState<string>("all");
+
   const [shown, setShown] = useState(PAGE);
   const [params] = useSearchParams();
+  const [agent, setAgent] = useState<string>(params.get("agent") ?? "all");
   const [selectedId, setSelectedId] = useState<string | null>(params.get("id"));
-  useEffect(() => setSelectedId(params.get("id")), [params]);
+  useEffect(() => {
+    setSelectedId(params.get("id"));
+    setAgent(params.get("agent") ?? "all");
+  }, [params]);
   useEffect(() => {
     const id = setTimeout(() => setQuery(input.trim()), 180);
     return () => clearTimeout(id);
@@ -226,7 +231,11 @@ function SessionSheet({ session: s, onClose }: { session: Session; onClose: () =
       <h2 className="m-0 break-words text-[22px] font-bold leading-tight tracking-[-0.03em]">{s.title}</h2>
       <p className="mt-2 flex items-center gap-2 text-[13px] text-ink-3">
         <span className="font-semibold text-ink-2">{t.origin[s.origin]}</span>
-        {s.project ? <span className="truncate">· {tildePath(s.project)}</span> : null}
+        {s.project ? (
+          <span className="flex min-w-0 items-center gap-1">
+            · <PathLink path={s.project}>{tildePath(s.project)}</PathLink>
+          </span>
+        ) : null}
       </p>
       <dl className="mt-4 grid grid-cols-3 gap-4">
         <Fact label={t.started} value={day(s.started)} />

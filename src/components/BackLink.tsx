@@ -1,5 +1,5 @@
 // Back (DESIGN.md "Wayfinding"): a screen reached through a link inside the
-// app (Fix list "Show me", a Dashboard tile, ⌘K, Adopt) shows where it came
+// app (Fix list "Show me", a Dashboard tile, ⌘K) shows where it came
 // from and goes back there with its filters and scroll as they were. The
 // sidebar is a place to go, not a path, so its links never leave a Back.
 import { useRef } from "react";
@@ -39,7 +39,7 @@ export function useTrackBack() {
   }
 }
 
-/** "‹ Fix list": goes back one step. `fallback` is for screens that are always one level down (Adopt). */
+/** "‹ Fix list": goes back one step. `fallback` is for screens that are always one level down. */
 export function BackLink({ fallback }: { fallback?: { to: string; label: string } }) {
   const loc = useLocation();
   const navigate = useNavigate();

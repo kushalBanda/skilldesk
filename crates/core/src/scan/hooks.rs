@@ -1,8 +1,7 @@
 //! Hooks inventory (slice 5): config for Claude (global, project, plugin),
 //! Codex, Cursor, Gemini, Copilot, OpenCode; run timing from Claude transcripts.
 //!
-//! Status: `Off` when switched off (Codex state, plugin off, or in SkillDesk's
-//! stash), else `Broken` when a script it runs is missing, `Slow` when p95 > 5 s, `Gone` for hooks
+//! Status: `Off` when switched off (Codex state or plugin off), else `Broken` when a script it runs is missing, `Slow` when p95 > 5 s, `Gone` for hooks
 //! that ran but are configured nowhere now.
 
 use crate::adapters;
@@ -115,30 +114,20 @@ pub fn configured(env: &Env) -> (Vec<(ItemId, RawHook)>, Vec<Item>) {
 pub fn scan(env: &Env, runs: Option<&HookRuns>) -> HookScan {
     let home = &env.home;
     let (configured, unreadable) = configured(env);
-    // Hooks SkillDesk switched off: kept in the stash, shown as Off.
-    let stashed = crate::actions::stash::read(env);
-    let all: Vec<(ItemId, RawHook, bool)> = configured
-        .into_iter()
-        .map(|(id, raw)| (id, raw, false))
-        .chain(stashed.into_iter().map(|e| {
-            let (id, raw) = e.to_raw();
-            (id, raw, true)
-        }))
-        .collect();
+    let all: Vec<(ItemId, RawHook)> = configured;
     let codex_off = hooks::codex_disabled(env);
     let mut items = Vec::with_capacity(all.len());
     let mut claimed: HashSet<(String, String)> = HashSet::new();
-    for (id, raw, stashed) in &all {
+    for (id, raw) in &all {
         let vars = Vars { home, plugin_root: raw.plugin_root.as_deref(), project: raw.project.as_deref() };
         let a = hooks::analyze(&raw.command, &vars);
         let switch = match (raw.agent, &raw.plugin) {
             (_, Some(_)) => SwitchKind::Plugin,
             ("codex", _) => SwitchKind::Native,
             ("opencode", _) => SwitchKind::None,
-            _ => SwitchKind::Stash,
+            _ => SwitchKind::Remove,
         };
-        let off = *stashed
-            || raw.native_key.as_ref().is_some_and(|k| codex_off.contains(k))
+        let off = raw.native_key.as_ref().is_some_and(|k| codex_off.contains(k))
             || raw.plugin.as_ref().is_some_and(|p| !p.enabled);
         // Runs are Claude's only; several entries may share (event, command):
         // the first one gets the runs so totals are not counted twice.

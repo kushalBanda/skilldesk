@@ -26,7 +26,6 @@ export function departure(req: ActionRequest): { ids: string[]; how: "trash" | "
     case "hook_remove":
       return { ids: req.ids, how: "trash" };
     case "plugin_forget":
-    case "library_remove":
       return { ids: [req.id], how: "trash" };
     case "storage_trash":
       return { ids: req.kinds, how: "trash" };
@@ -195,5 +194,114 @@ export function enterScreen(el: Element | null) {
   el.animate(
     reduced() ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
     { duration: 220, easing: EASE },
+  );
+}
+
+// First run: Welcome hands over to the Dashboard (DESIGN.md §5).
+// Act 1, discovery: the intro lifts away and the discovery scene rises in on
+// the same sky while the scan runs (Welcome.tsx).
+// Act 2, lift-off: when the Dashboard has its data, the scene rises away, the
+// hills sink, the sky clears, and the app shell settles in underneath.
+// Act 3, reveal: the Dashboard sections rise in order and the activity grid
+// wipes in, oldest week to today.
+
+/** Lift-off length: the Welcome overlay is fully clear after this (ms). */
+export const WELCOME_EXIT_MS = 660;
+
+// Smooth on WebKit: only transform (translate, never scale) and opacity move,
+// so the compositor runs every frame and text is never re-rasterised. No
+// animated blur, and the glass bar drops its backdrop blur while it leaves.
+const promote = (el: HTMLElement, props: string) => {
+  el.style.willChange = props;
+  return el;
+};
+
+/** Rise and fade out, top to bottom; stays hidden (fill forwards). */
+function liftAway(els: HTMLElement[], duration: number, gap: number) {
+  els.forEach((el, i) =>
+    promote(el, "transform, opacity").animate(
+      [
+        { opacity: 1, transform: "translateY(0)" },
+        { opacity: 0, transform: "translateY(-24px)" },
+      ],
+      { duration, delay: i * gap, easing: EASE, fill: "forwards" },
+    ),
+  );
+}
+
+/** Scan pressed: the intro lifts away; the discovery scene rises in on its own (CSS `.scene-in`). */
+export function introExit(root: HTMLElement) {
+  const els = [...root.querySelectorAll<HTMLElement>("[data-intro] [data-lift]")];
+  if (reduced()) els.forEach((el) => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: "linear", fill: "forwards" }));
+  else liftAway(els, 360, 30);
+}
+
+/** Welcome leaves. Resolves when the overlay is fully gone. */
+export function welcomeExit(root: HTMLElement): Promise<void> {
+  const fill = { fill: "forwards" as const };
+  root.dataset.leaving = "";
+  if (reduced()) {
+    return root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: "linear", ...fill }).finished.then(() => {});
+  }
+  const hills = root.querySelector<HTMLElement>("[data-hills]");
+  liftAway([...root.querySelectorAll<HTMLElement>("[data-scan] [data-lift]")], 440, 40);
+  if (hills)
+    promote(hills, "transform, opacity").animate(
+      [
+        { opacity: 1, transform: "translateY(0)" },
+        { opacity: 0, transform: "translateY(10%)" },
+      ],
+      { duration: 600, delay: 60, easing: EASE, ...fill },
+    );
+  return promote(root, "opacity")
+    .animate([{ opacity: 1 }, { opacity: 0 }], { duration: 360, delay: WELCOME_EXIT_MS - 360, easing: EASE, ...fill })
+    .finished.then(() => {});
+}
+
+/** The app shell arrives under the leaving Welcome: faded and 8 px low, to rest. */
+export function shellEnter(el: HTMLElement | null) {
+  if (!el) return;
+  if (reduced()) {
+    el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, easing: "linear" });
+    return;
+  }
+  promote(el, "transform, opacity");
+  el.animate(
+    [
+      { opacity: 0, transform: "translateY(8px)" },
+      { opacity: 1, transform: "translateY(0)" },
+    ],
+    { duration: 520, delay: 240, easing: EASE, fill: "backwards" },
+  ).finished.then(
+    () => (el.style.willChange = ""),
+    () => (el.style.willChange = ""),
+  );
+}
+
+/** Sections rise in, one after another (60 ms apart), when the first prompts arrive. */
+export function revealSections(root: HTMLElement | null) {
+  if (!root) return;
+  const rm = reduced();
+  // The page header stays put; everything under it rises.
+  [...root.children].slice(1).forEach((el, i) => {
+    el.animate(
+      rm ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: "translateY(12px)" }, { opacity: 1, transform: "none" }],
+      { duration: rm ? 200 : 520, delay: rm ? 0 : i * 60, easing: EASE, fill: "backwards" },
+    );
+  });
+}
+
+/**
+ * Activity grid sweeps in left to right, oldest week first, about 0.8 s. One
+ * clip on the whole grid, not one animation per cell, so it stays smooth.
+ */
+export function sweepGrid(grid: HTMLElement | null) {
+  if (!grid || reduced()) return;
+  grid.animate(
+    [
+      { clipPath: "inset(0 100% 0 0)", opacity: 0.4 },
+      { clipPath: "inset(0 0 0 0)", opacity: 1 },
+    ],
+    { duration: 800, delay: 240, easing: EASE, fill: "backwards" },
   );
 }

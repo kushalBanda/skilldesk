@@ -11,8 +11,6 @@ import type { Fix } from "./bindings/Fix";
 import type { StorageReport } from "./bindings/StorageReport";
 import type { InstallPreview } from "./bindings/InstallPreview";
 import type { InstallTarget } from "./bindings/InstallTarget";
-import type { AdoptView } from "./bindings/AdoptView";
-import type { SkillDiff } from "./bindings/SkillDiff";
 import type { Board } from "./bindings/Board";
 import type { MarketList } from "./bindings/MarketList";
 import type { MarketFetched } from "./bindings/MarketFetched";
@@ -53,10 +51,8 @@ export const ipc = {
   fixesList: () => invoke<Fix[]>("fixes_list"),
   fixDismiss: (id: string) => invoke<void>("fix_dismiss", { id }),
   /** Gone hooks only: hides them from every list. No files change. */
-  libraryInspect: (path: string) => invoke<InstallPreview>("library_inspect", { path }),
+  skillInspect: (path: string) => invoke<InstallPreview>("skill_inspect", { path }),
   skillTargets: (id: ItemId) => invoke<InstallTarget[]>("skill_targets", { id }),
-  adoptView: (id: ItemId) => invoke<AdoptView>("adopt_view", { id }),
-  skillDiff: (id: ItemId, a: string, b: string) => invoke<SkillDiff>("skill_diff", { id, a, b }),
   revealInFinder: (path: string) => invoke<void>("reveal_in_finder", { path }),
   settingsGet: () => invoke<SettingsData>("settings_get"),
   agentSetOn: (agent: string, on: boolean) => invoke<void>("agent_set_on", { agent, on }),

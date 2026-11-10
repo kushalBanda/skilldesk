@@ -1,6 +1,7 @@
 import { PageHeader } from "../components/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { PathLink, PlaceLink, usePluginRoute } from "../components/PlaceLink";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -15,7 +16,6 @@ import { AgentLogo, AgentStack } from "../components/AgentLogo";
 import { SearchField } from "../components/SearchField";
 import { Th, sortBy, useSort } from "../components/SortHeader";
 import { Switch } from "../components/Switch";
-import { HoldButton } from "../components/HoldButton";
 import { InstallSheet } from "./InstallSheet";
 import type { SkillLocation } from "../ipc/bindings/SkillLocation";
 import { FChip } from "../components/FChip";
@@ -24,7 +24,7 @@ import { agentName } from "../lib/agents";
 import { formatCount, formatDate, stripFrontmatter, tildePath } from "../lib/format";
 import { t } from "../strings";
 
-type StatusFilter = "all" | "used" | "unused" | "gone" | "broken" | "library";
+type StatusFilter = "all" | "used" | "unused" | "gone" | "broken";
 
 function facts(item: Item): SkillFacts | null {
   return item.facts.kind === "skill" ? item.facts : null;
@@ -40,7 +40,6 @@ const ownCopies = (f: SkillFacts) => f.locations.filter((l) => l.link.kind === "
 export function homeLabel(item: Item, agents: AgentSummary[]): string {
   const f = facts(item);
   if (!f || item.status.state === "gone") return "";
-  if (f.library) return t.inLibrary;
   const copies = ownCopies(f);
   if (copies.length > 1) return t.separateCopies(copies.length);
   if (copies.length === 1) {
@@ -78,8 +77,6 @@ export function Skills() {
     setInstalling(false);
     setSelectedId(id);
   };
-  const { run } = useAction();
-  const navigate = useNavigate();
 
   const skills = useMemo(() => (data ?? []).filter((i) => i.status.state !== "not_an_item"), [data]);
   const found = skills.find((s) => s.id === selectedId) ?? null;
@@ -92,7 +89,6 @@ export function Skills() {
       unused: skills.filter((s) => s.status.state === "unused").length,
       gone: skills.filter((s) => s.status.state === "gone").length,
       broken: skills.filter(isBroken).length,
-      library: skills.filter((s) => facts(s)?.library).length,
     }),
     [skills],
   );
@@ -100,7 +96,6 @@ export function Skills() {
     const st = s.status.state;
     if (status === "all" && st === "gone") return false;
     if (status === "used" && ((s.usage?.count ?? 0) === 0 || st === "gone")) return false;
-    if (status === "library" && !facts(s)?.library) return false;
     if (status === "broken" && !isBroken(s)) return false;
     if ((status === "unused" || status === "gone") && st !== status) return false;
     if (agent && !s.agents.includes(agent)) return false;
@@ -150,7 +145,6 @@ export function Skills() {
           {chip("unused", t.unused)}
           {chip("gone", t.gone)}
           {chip("broken", t.broken)}
-          {chip("library", t.inLibrary)}
           <span className="mx-1 h-5 w-px bg-rule" />
           {agents
             .filter((a) => a.tier !== "skills")
@@ -198,8 +192,6 @@ export function Skills() {
                   compact={compact}
                   label={homeLabel(s, agents)}
                   onOpen={() => open(s.id)}
-                  onAdd={() => void run({ type: "skill_add_to_library", id: s.id })}
-                  onAdopt={() => navigate(`/adopt?id=${s.id}`)}
                 />
               ))}
             </tbody>
@@ -231,8 +223,6 @@ function SkillRow({
   compact,
   label,
   onOpen,
-  onAdd,
-  onAdopt,
 }: {
   item: Item;
   agentName: (key: string) => string;
@@ -240,8 +230,6 @@ function SkillRow({
   compact: boolean;
   label: string;
   onOpen: () => void;
-  onAdd: () => void;
-  onAdopt: () => void;
 }) {
   const f = facts(item);
   const st = item.status.state;
@@ -266,33 +254,7 @@ function SkillRow({
         ) : null}
         {label ? (
           <div className="mt-0.5 flex items-center gap-2 truncate text-[12px]">
-            <span className={f?.library ? "inline-flex items-center gap-1 font-medium text-accent-text" : "text-ink-3"}>
-              {f?.library ? <LibraryGlyph /> : null}
-              {label}
-            </span>
-            {f && (ownCopies(f).length >= 2 || (f.library && ownCopies(f).length)) ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAdopt();
-                }}
-                className="font-semibold text-accent-text hover:underline"
-              >
-                {t.adoptInto}
-              </button>
-            ) : f && !f.library && ownCopies(f).length ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAdd();
-                }}
-                className="font-semibold text-accent-text hover:underline"
-              >
-                {t.addToLibrary}
-              </button>
-            ) : null}
+            <span className="text-ink-3">{label}</span>
           </div>
         ) : null}
       </td>
@@ -306,33 +268,10 @@ function SkillRow({
   );
 }
 
-function LibraryGlyph() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M3 2.5h2.5v11H3zM7 2.5h2.5v11H7zM11 3l2.3-.6 2.2 10.6-2.3.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className="flex h-7 w-7 items-center justify-center rounded-input text-ink-2 hover:bg-sunk active:scale-[0.92]"
-    >
-      {children}
-    </button>
-  );
-}
-
 function SkillSheet({ item, agents, onClose }: { item: Item; agents: AgentSummary[]; onClose: () => void }) {
   const f = facts(item);
   const { run } = useAction();
-  const navigate = useNavigate();
-  const hasFile = !!f?.library || (f?.locations ?? []).some((l) => l.link.kind !== "dangling");
+  const hasFile = (f?.locations ?? []).some((l) => l.link.kind !== "dangling");
   const doc = useQuery({
     queryKey: ["doc", item.id],
     queryFn: () => ipc.itemDocument(item.id),
@@ -341,19 +280,40 @@ function SkillSheet({ item, agents, onClose }: { item: Item; agents: AgentSummar
   const targets = useQuery({
     queryKey: ["skill-targets", item.id, item.agents.join(",")],
     queryFn: () => ipc.skillTargets(item.id),
-    enabled: !!f?.library,
+    enabled: hasFile && item.status.state !== "gone",
   });
-  const [copied, setCopied] = useState(false);
   const name = (key: string) => agentName(agents, key);
-  const toggle = (agent: string, on: boolean) => void run({ type: "skill_toggle", id: item.id, agent, on });
+  const navigate = useNavigate();
+  const pluginRoute = usePluginRoute();
+  // The switch moves on press; the scan after the write confirms it. A failed
+  // or cancelled write falls back to what is on disk.
+  const [want, setWant] = useState<Record<string, boolean>>({});
+  const agentsKey = item.agents.join(",");
+  useEffect(() => setWant({}), [agentsKey]);
+  const toggle = async (agent: string, on: boolean) => {
+    setWant((w) => ({ ...w, [agent]: on }));
+    try {
+      await run({ type: "skill_toggle", id: item.id, agent, on });
+    } finally {
+      window.setTimeout(
+        () =>
+          setWant((w) => {
+            const { [agent]: _, ...rest } = w;
+            return rest;
+          }),
+        1500,
+      );
+    }
+  };
   const tgs = targets.data ?? [];
   // Same meaning as the row's dots: the agent sees the skill (from any folder it reads).
+  // Groups use the state on disk, so a row does not jump between lists mid-press.
   const isOn = (key: string) => item.agents.includes(key);
-  const linked = tgs.filter((x) => isOn(x.key));
-  const notLinked = tgs.filter((x) => !isOn(x.key));
-  const lineCount = doc.data ? doc.data.split("\n").length : null;
+  const onFor = tgs.filter((x) => isOn(x.key));
+  const notOn = tgs.filter((x) => !isOn(x.key));
   const targetRow = (x: (typeof tgs)[number]) => {
-    const on = isOn(x.key);
+    const pending = x.key in want;
+    const on = pending ? want[x.key]! : isOn(x.key);
     const others = x.agents.filter((a) => a !== x.key && a !== "agents_shared");
     return (
       <li key={x.key} className="flex items-center gap-3 rounded-row bg-panel px-3 py-2">
@@ -367,7 +327,7 @@ function SkillSheet({ item, agents, onClose }: { item: Item; agents: AgentSummar
             {tildePath(x.dir)}
           </div>
         </div>
-        <Switch on={on} label={`${name(x.key)}: ${on ? t.on : t.off}`} onChange={(next) => toggle(x.key, next)} />
+        <Switch on={on} disabled={pending} label={`${name(x.key)}: ${on ? t.on : t.off}`} onChange={(next) => void toggle(x.key, next)} />
       </li>
     );
   };
@@ -375,70 +335,24 @@ function SkillSheet({ item, agents, onClose }: { item: Item; agents: AgentSummar
     <DetailSheet title={item.name} onClose={onClose}>
       <h2 className="m-0 text-[24px] font-bold leading-tight tracking-[-0.03em]">{item.name}</h2>
       {f?.description ? <p className="mt-2 text-ink-2">{f.description}</p> : null}
-      <dl className="mt-4 flex gap-8">
-        <div>
-          <dt className="text-[12.5px] font-semibold text-ink-3">{t.colRuns}</dt>
-          <dd className="tnum m-0 text-[22px] font-bold">{formatCount(item.usage?.count ?? 0)}</dd>
-        </div>
-        {item.usage?.last_used ? (
-          <div>
-            <dt className="text-[12.5px] font-semibold text-ink-3">{t.colLastUsed}</dt>
-            <dd className="m-0 text-[22px] font-bold">{formatDate(item.usage.last_used)}</dd>
-          </div>
-        ) : null}
-      </dl>
-      {f?.library ? (
+      {tgs.length ? (
         <>
-          <div className="mt-5 rounded-row bg-accent-soft px-3 py-2.5">
-            <div className="flex items-center gap-1 text-[12.5px] font-semibold text-accent-text">
-              <LibraryGlyph /> {t.libraryHome}
-              <span className="ml-auto flex">
-                <IconButton label={t.showInFinder} onClick={() => void ipc.revealInFinder(f.library!)}>
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M2 4.5h4l1.5 1.5H14v6.5H2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-                  </svg>
-                </IconButton>
-                <IconButton
-                  label={copied ? t.copied : t.copyPath}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(f.library!);
-                    setCopied(true);
-                    window.setTimeout(() => setCopied(false), 1600);
-                  }}
-                >
-                  {copied ? (
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <rect x="5" y="5" width="8.5" height="8.5" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-                      <path d="M10.5 3H4a1 1 0 00-1 1v6.5" stroke="currentColor" strokeWidth="1.4" />
-                    </svg>
-                  )}
-                </IconButton>
-              </span>
-            </div>
-            <div className="selectable mt-1 truncate font-mono text-[12.5px]" title={f.library}>
-              {tildePath(f.library)}
-            </div>
-            {lineCount ? <div className="text-[12px] text-ink-3">SKILL.md · {t.lines(lineCount)}</div> : null}
-          </div>
           <h3 className="mb-2 mt-6 text-[12.5px] font-semibold text-ink-3">
-            {t.linkedIn} · {linked.length}
+            {t.linkedIn} · {onFor.length}
           </h3>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">{linked.map(targetRow)}</ul>
-          {notLinked.length ? (
+          <p className="m-0 mb-2 text-[12.5px] leading-relaxed text-ink-3">{t.skillSwitchNote}</p>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">{onFor.map(targetRow)}</ul>
+          {notOn.length ? (
             <>
               <h3 className="mb-2 mt-6 text-[12.5px] font-semibold text-ink-3">
-                {t.notLinked} · {notLinked.length}
+                {t.notLinked} · {notOn.length}
               </h3>
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">{notLinked.map(targetRow)}</ul>
+              <ul className="m-0 flex list-none flex-col gap-2 p-0">{notOn.map(targetRow)}</ul>
             </>
           ) : null}
         </>
       ) : null}
-      {f && (!f.library || f.locations.some((l) => !(l.link.kind === "link" && l.link.target === f.library))) && f.locations.length ? (
+      {f && f.locations.length ? (
         <>
           <h3 className="mb-2 mt-6 text-[12.5px] font-semibold text-ink-3">
             {t.places} · {f.locations.length}
@@ -452,21 +366,45 @@ function SkillSheet({ item, agents, onClose }: { item: Item; agents: AgentSummar
                   ))}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="selectable truncate font-mono text-[12.5px]" title={l.path}>
-                    {tildePath(l.path)}
-                  </div>
-                  <div className="mt-0.5 text-[12.5px] text-ink-2">
+                  {l.link.kind === "dangling" ? (
+                    <div className="selectable truncate font-mono text-[12.5px]" title={l.path}>
+                      {tildePath(l.path)}
+                    </div>
+                  ) : (
+                    <PathLink path={l.path} className="block font-mono text-[12.5px]">
+                      {tildePath(l.path)}
+                    </PathLink>
+                  )}
+                  <div className="mt-0.5 truncate text-[12.5px] text-ink-2">
                     {l.agents.map(name).join(", ")}
-                    {l.link.kind === "link" ? ` · ${t.linkTo} ${tildePath(l.link.target)}` : ""}
+                    {l.link.kind === "link" ? (
+                      <>
+                        {` · ${t.linkTo} `}
+                        <PathLink path={l.link.target}>{tildePath(l.link.target)}</PathLink>
+                      </>
+                    ) : null}
                     {l.link.kind === "dangling" ? <span className="text-danger"> · {t.dangling}</span> : null}
-                    {l.plugin ? ` · ${t.plugin} ${l.plugin.id}${l.plugin.enabled ? "" : ` (${t.status.off})`}` : ""}
-                    {l.project ? ` · ${t.project} ${tildePath(l.project)}` : ""}
+                    {l.plugin ? (
+                      <>
+                        {` · ${t.plugin} `}
+                        {pluginRoute(l.plugin.id) ? (
+                          <PlaceLink onClick={() => navigate(pluginRoute(l.plugin!.id)!)} title={t.openPlugin}>
+                            {l.plugin.id}
+                          </PlaceLink>
+                        ) : (
+                          l.plugin.id
+                        )}
+                        {l.plugin.enabled ? "" : ` (${t.status.off})`}
+                      </>
+                    ) : null}
+                    {l.project ? (
+                      <>
+                        {` · ${t.project} `}
+                        <PathLink path={l.project}>{tildePath(l.project)}</PathLink>
+                      </>
+                    ) : null}
                   </div>
                 </div>
-                {/* One agent's own folder: switch it off here (the row no longer has dots). */}
-                {l.agents.length === 1 && !l.plugin && !l.project && l.link.kind !== "dangling" && item.status.state !== "gone" ? (
-                  <Switch on label={`${name(l.agents[0]!)}: ${t.on}`} onChange={(next) => toggle(l.agents[0]!, next)} />
-                ) : null}
                 {l.link.kind === "dangling" ? (
                   <button
                     type="button"
@@ -490,35 +428,6 @@ function SkillSheet({ item, agents, onClose }: { item: Item; agents: AgentSummar
             </button>
           ) : null}
         </>
-      ) : null}
-      {f && (ownCopies(f).length >= 2 || (f.library && ownCopies(f).length)) ? (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => navigate(`/adopt?id=${item.id}`)}
-            className="h-10 rounded-full bg-ink px-5 font-semibold text-bg active:scale-[0.97]"
-          >
-            {t.adoptInto}
-          </button>
-          <p className="mt-2 text-[12.5px] text-ink-3">{t.separateCopies(ownCopies(f).length + (f.library ? 1 : 0))}</p>
-        </div>
-      ) : f && !f.library && ownCopies(f).length ? (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => void run({ type: "skill_add_to_library", id: item.id })}
-            className="h-10 rounded-full bg-ink px-5 font-semibold text-bg active:scale-[0.97]"
-          >
-            {t.addToLibrary}
-          </button>
-          <p className="mt-2 text-[12.5px] text-ink-3">{t.addToLibraryNote}</p>
-        </div>
-      ) : null}
-      {f?.library ? (
-        <div className="mt-6">
-          <HoldButton label={t.holdToRemove} onDone={() => void run({ type: "library_remove", id: item.id }, onClose)} />
-          <p className="mt-2 text-[12.5px] text-ink-3">{t.removeNote}</p>
-        </div>
       ) : null}
       {hasFile ? (
         <article className="skill-md selectable mt-6 border-t border-rule pt-4 text-[14px]">

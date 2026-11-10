@@ -5,8 +5,4 @@ export type SkillFacts = { description: string | null,
 /**
  * Canonical directory of the first real copy (where SKILL.md is read).
  */
-home: string, locations: Array<SkillLocation>, 
-/**
- * `~/.skilldesk/skills/<name>` (resolved) when the skill is in the library.
- */
-library: string | null, };
+home: string, locations: Array<SkillLocation>, };

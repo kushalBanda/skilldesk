@@ -1,6 +1,7 @@
 // Install skill sheet (DESIGN.md §4 "Install sheet", §7.14): drop zone or
-// picker → what SKILL.md says → "Turn on for" chips → one CTA. Writes go
-// through the action engine; a clash opens Replace preview.
+// picker, then what SKILL.md says, then agent chips, then one CTA. The CTA
+// copies the skill into each picked agent's folder through the action engine;
+// a clash opens Replace preview.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -42,8 +43,8 @@ export function InstallSheet({ onClose, onInstalled }: { onClose: () => void; on
   }, []);
 
   const preview = useQuery({
-    queryKey: ["library-inspect", path],
-    queryFn: () => ipc.libraryInspect(path!),
+    queryKey: ["skill-inspect", path],
+    queryFn: () => ipc.skillInspect(path!),
     enabled: path !== null,
     retry: false,
     gcTime: 0,
@@ -106,18 +107,19 @@ export function InstallSheet({ onClose, onInstalled }: { onClose: () => void; on
           </div>
           <h3 className="m-0 mt-5 break-words text-[20px] font-bold tracking-[-0.03em]">{p.name}</h3>
           {p.description ? <p className="mt-1 text-ink-2">{p.description}</p> : null}
-          <ClashNotes name={p.name} inLibrary={p.in_library} targets={p.targets} picked={picked} agents={agents} />
+          <ClashNotes name={p.name} targets={p.targets} picked={picked} agents={agents} />
           <AgentChips targets={p.targets} picked={picked} onChange={setChosen} agents={agents} />
           <button
             type="button"
+            disabled={!n}
             onClick={() =>
-              void run({ type: "library_install", from: p.source, agents: picked }, () => {
+              void run({ type: "skill_install", from: p.source, agents: picked }, () => {
                 onInstalled(p.name);
               })
             }
-            className="mt-6 h-11 w-full rounded-full bg-ink font-semibold text-bg active:scale-[0.98]"
+            className="mt-6 h-11 w-full rounded-full bg-ink font-semibold text-bg active:scale-[0.98] disabled:opacity-40"
           >
-            {n ? t.installAndTurnOn(n) : t.installLibraryOnly}
+            {n ? t.installAndTurnOn(n) : t.pickAgent}
           </button>
         </>
       ) : null}

@@ -62,7 +62,7 @@ impl RawMcp {
         match self.format {
             Format::ClaudeJson => SwitchKind::None,
             Format::Plugin => SwitchKind::Plugin,
-            Format::Json => SwitchKind::Stash,
+            Format::Json => SwitchKind::Remove,
             Format::McpJson | Format::OpenCode | Format::CodexToml => SwitchKind::Native,
         }
     }
@@ -85,7 +85,7 @@ fn servers_at<'a>(v: &'a Value, path: &[&str]) -> Option<&'a serde_json::Map<Str
     cur.as_object()
 }
 
-/// Every configured server entry, plus entries SkillDesk stashed (switched off).
+/// Every configured server entry.
 pub fn configured(env: &Env) -> Vec<RawMcp> {
     let on = |key: &str| adapters::find(key).is_some_and(|a| a.is_installed(env));
     let home = &env.home;
@@ -199,10 +199,6 @@ pub fn configured(env: &Env) -> Vec<RawMcp> {
                 });
             }
         }
-    }
-    // Switched off by SkillDesk: kept in the stash.
-    for e in crate::actions::stash::read_mcp(env) {
-        out.push(e.to_raw());
     }
     out
 }

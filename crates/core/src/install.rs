@@ -1,12 +1,13 @@
-//! Install a skill from a folder, `.zip` or `.skill` archive (ADR 0015).
+//! Install a skill from a folder, `.zip` or `.skill` archive straight into
+//! agent skill folders (each agent gets its own copy).
 //! Rules: one skill folder per source, symlinks and `.git` never copied, unix
 //! modes kept (setuid stripped). An archive entry that would land outside its
 //! folder refuses the whole archive instead of being skipped.
 //!
-//! `inspect` only reads. `stage` copies into `~/.skilldesk/staging/<plan>/`,
-//! SkillDesk's own scratch space; the plan's first op moves it into the library.
+//! `inspect` only reads. `stage` copies into `<data dir>/staging/<plan>/`,
+//! SkillDesk's own scratch space; the plan moves each staged copy into an
+//! agent folder.
 
-use super::{checked_library_dir, dir_stats, overlaps, LibrarySource, Sidecar, SIDECAR};
 use crate::adapters;
 use crate::core::Core;
 use crate::error::{AppError, ErrorKind};
@@ -21,7 +22,7 @@ use ts_rs::TS;
 
 const MAX_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_FILES: u32 = 5_000;
-const SKIP: &[&str] = &[".git", ".DS_Store", "__MACOSX", SIDECAR];
+const SKIP: &[&str] = &[".git", ".DS_Store", "__MACOSX"];
 
 fn invalid(msg: impl Into<String>) -> AppError {
     AppError::new(ErrorKind::InvalidInput, msg)
@@ -42,7 +43,7 @@ pub enum SourceKind {
 #[ts(export)]
 pub enum TargetExisting {
     Nothing,
-    /// Already a link to this library skill.
+    /// This skill is already there (the same folder, or a link to it).
     Linked,
     /// The agent's own folder of the same name (Replace preview).
     Folder { files: u32, #[ts(type = "number")] bytes: u64 },
@@ -72,8 +73,6 @@ pub struct InstallPreview {
     pub files: u32,
     #[ts(type = "number")]
     pub bytes: u64,
-    /// A library skill of the same name is there already (it would be replaced).
-    pub in_library: bool,
     pub targets: Vec<InstallTarget>,
 }
 
@@ -191,7 +190,9 @@ fn locate(path: &Path, kind: SourceKind) -> Result<Located, AppError> {
 }
 
 /// Every detected agent's own skills folder, one chip per folder on disk.
-pub fn targets(core: &Core, name: &str, library_skill: &Path) -> Vec<InstallTarget> {
+/// `source` = the skill's own folder on this Mac, when there is one: a target
+/// that already holds it (or links to it) is `Linked`.
+pub fn targets(core: &Core, name: &str, source: Option<&Path>) -> Vec<InstallTarget> {
     let env = &core.env;
     let mut out: Vec<InstallTarget> = Vec::new();
     let mut agents = adapters::detected(env);
@@ -208,9 +209,10 @@ pub fn targets(core: &Core, name: &str, library_skill: &Path) -> Vec<InstallTarg
             continue;
         }
         let link = dir.join(name);
-        let existing = match classify_target(&link, Some(library_skill)) {
+        let existing = match classify_target(&link, source) {
             Ok(TargetState::Absent) => TargetExisting::Nothing,
             Ok(TargetState::LinkToSource) => TargetExisting::Linked,
+            Ok(TargetState::RealDir) if source.is_some_and(|s| same_dir(s, &link)) => TargetExisting::Linked,
             Ok(TargetState::RealDir) => {
                 let (files, bytes) = dir_stats(&link);
                 TargetExisting::Folder { files, bytes }
@@ -227,7 +229,7 @@ pub fn targets(core: &Core, name: &str, library_skill: &Path) -> Vec<InstallTarg
     out
 }
 
-fn same_dir(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_dir(a: &Path, b: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
     match (std::fs::metadata(a), std::fs::metadata(b)) {
         (Ok(x), Ok(y)) => x.dev() == y.dev() && x.ino() == y.ino(),
@@ -236,9 +238,8 @@ fn same_dir(a: &Path, b: &Path) -> bool {
 }
 
 pub fn inspect(core: &Core, source: &Path) -> Result<InstallPreview, AppError> {
-    let lib = checked_library_dir(&core.env)?;
     let kind = kind_of(source)?;
-    if overlaps(source, &lib) || overlaps(source, &core.env.skilldesk_dir()) {
+    if overlaps(source, &core.env.staging_dir()) {
         return Err(invalid("That is SkillDesk's own folder (or holds it). Pick a skill from somewhere else."));
     }
     let located = locate(source, kind)?;
@@ -260,27 +261,25 @@ pub fn inspect(core: &Core, source: &Path) -> Result<InstallPreview, AppError> {
     };
     let raw = meta.name.clone().or(fallback).unwrap_or_else(|| "skill".into());
     let name = sanitize_name(crate::parse::claude::bare_name(&raw));
-    let dest = lib.join(&name);
     Ok(InstallPreview {
         source: source.to_path_buf(),
         kind,
         description: meta.description,
         files,
         bytes,
-        in_library: std::fs::symlink_metadata(&dest).is_ok(),
-        targets: targets(core, &name, &dest),
+        targets: targets(core, &name, None),
         name,
     })
 }
 
-/// Copies the skill into `~/.skilldesk/staging/<plan_id>/<name>` with its
-/// sidecar. Returns the staged folder.
-pub fn stage(core: &Core, source: &Path, plan_id: &str, name: &str) -> Result<PathBuf, AppError> {
+/// Copies the skill into `<data dir>/staging/<plan_id>/<slot>/<name>`.
+/// One slot per agent folder it goes to. Returns the staged folder.
+pub fn stage(core: &Core, source: &Path, plan_id: &str, slot: usize, name: &str) -> Result<PathBuf, AppError> {
     let kind = kind_of(source)?;
     let located = locate(source, kind)?;
-    let staging = core.env.skilldesk_dir().join("staging");
+    let staging = core.env.staging_dir();
     prune_staging(core, &staging);
-    let dest = staging.join(plan_id).join(name);
+    let dest = staging.join(plan_id).join(slot.to_string()).join(name);
     let io = |e: std::io::Error| AppError::new(ErrorKind::Io, format!("Cannot prepare the install: {e}"));
     std::fs::create_dir_all(&dest).map_err(io)?;
     let result = match &located {
@@ -291,13 +290,34 @@ pub fn stage(core: &Core, source: &Path, plan_id: &str, name: &str) -> Result<Pa
         let _ = std::fs::remove_dir_all(staging.join(plan_id));
         return Err(e);
     }
-    let src = match kind {
-        // A marketplace download records where it came from (ADR 0016).
-        SourceKind::Folder => core.origin_of(source).unwrap_or_else(|| LibrarySource::Local { path: source.to_path_buf() }),
-        _ => LibrarySource::Zip { path: source.to_path_buf() },
-    };
-    std::fs::write(dest.join(SIDECAR), Sidecar::new(src).render()).map_err(io)?;
     Ok(dest)
+}
+
+/// Files and bytes under a folder (links not followed).
+pub fn dir_stats(dir: &Path) -> (u32, u64) {
+    let mut files = 0u32;
+    let mut bytes = 0u64;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            let Ok(m) = std::fs::symlink_metadata(e.path()) else { continue };
+            if m.is_dir() {
+                stack.push(e.path());
+            } else {
+                files += 1;
+                bytes += m.len();
+            }
+        }
+    }
+    (files, bytes)
+}
+
+/// Whether `a` and `b` overlap (one is the other or inside it), after resolving links.
+pub fn overlaps(a: &Path, b: &Path) -> bool {
+    let c = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let (a, b) = (c(a), c(b));
+    a.starts_with(&b) || b.starts_with(&a)
 }
 
 /// Staged copies nobody applied (or installs that were undone) go to the
@@ -312,7 +332,7 @@ fn prune_staging(core: &Core, staging: &Path) {
     }
 }
 
-fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+pub(crate) fn copy_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
@@ -386,19 +406,18 @@ mod tests {
     /// An entry like `../../.zshrc` refuses the whole archive; nothing is
     /// written outside (or inside) SkillDesk's folders.
     #[test]
-    fn library_install_zip_rejects_zip_slip() {
+    fn skill_install_zip_rejects_zip_slip() {
         let tmp = tempfile::tempdir().unwrap();
         let home = tmp.path().canonicalize().unwrap();
         let core = Core::open(crate::env::Env::for_test(&home, &home.join("data"))).unwrap();
         let evil = home.join("evil.zip");
         zip_with(&evil, &[("demo/SKILL.md", "---\nname: demo\n---\n"), ("demo/../../../escaped.txt", "pwned")]);
         assert!(inspect(&core, &evil).is_err());
-        assert!(stage(&core, &evil, "p1", "demo").is_err());
-        let req = crate::actions::ActionRequest::LibraryInstall { from: evil.clone(), agents: vec![] };
+        assert!(stage(&core, &evil, "p1", 0, "demo").is_err());
+        let req = crate::actions::ActionRequest::SkillInstall { from: evil.clone(), agents: vec![] };
         assert!(core.action_plan(req).is_err());
         assert!(!home.join("escaped.txt").exists() && !tmp.path().parent().unwrap().join("escaped.txt").exists());
-        assert!(!home.join(".skilldesk/skills/demo").exists());
-        assert!(!home.join(".skilldesk/staging/p1").exists(), "failed stage cleans up");
+        assert!(!core.env.staging_dir().join("p1").exists(), "failed stage cleans up");
 
         // An absolute entry is refused the same way.
         zip_with(&evil, &[("demo/SKILL.md", "---\nname: demo\n---\n"), ("/tmp/abs.txt", "x")]);

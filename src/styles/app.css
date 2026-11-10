@@ -140,15 +140,33 @@ textarea {
   .sheet-out { animation: fade-out 120ms linear forwards; }
 }
 
+/* Welcome: one frosted bar over the hills; a bright edge catches the light. */
+.welcome-glass {
+  background: var(--welcome-glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 0 0 1px var(--welcome-glass-edge), 0 18px 40px -20px var(--welcome-drop);
+}
+
+/* While Welcome leaves: no backdrop blur under moving layers (WebKit re-renders
+   it every frame); a near-solid fill looks the same at speed. */
+.welcome-scene[data-leaving] .welcome-glass {
+  background: var(--welcome-glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 /* Reduced transparency: solid surfaces. */
 @media (prefers-reduced-transparency: reduce) {
-  .glass {
+  .glass,
+  .welcome-glass {
     background: var(--bg);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 }
-:root[data-transparency="reduce"] .glass {
+:root[data-transparency="reduce"] .glass,
+:root[data-transparency="reduce"] .welcome-glass {
   background: var(--bg);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -279,3 +297,47 @@ main table tr.sub-row > td:first-child { padding-left: 44px; }
 thead:hover .col-grip > i:not(.bg-accent) { background-color: var(--rule); }
 /* Numbers and dates in a table cell never wrap; a narrow column ends them with "…". */
 main td.tnum { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* First scan (Dashboard): an accent band travels the bar while a stage runs,
+   and each stage check draws itself in when it lands. */
+.scan-bar { transition: opacity 400ms var(--ease); }
+.scan-bar > span {
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: scan-travel 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes scan-travel { to { transform: translateX(100%); } }
+.stage-check path { stroke-dasharray: 12; stroke-dashoffset: 12; animation: check-draw 320ms var(--ease) forwards; }
+@keyframes check-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .scan-bar > span { animation: none; transform: none; opacity: 0.5; }
+  .stage-check path { animation: none; stroke-dashoffset: 0; }
+}
+
+/* First-run discovery scene (Welcome.tsx): parts rise in, the title and stage
+   line cross-fade when they change, a soft halo breathes behind the agents,
+   and the stage bar fills by transform only. */
+@keyframes scene-in { from { opacity: 0; transform: translateY(16px); } }
+.scene-in { animation: scene-in 560ms var(--ease) backwards; }
+@keyframes swap-in { from { opacity: 0; transform: translateY(6px); } }
+.swap-in { animation: swap-in 360ms var(--ease); }
+.scan-halo {
+  position: absolute;
+  inset: -48px -64px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0));
+  animation: halo-breathe 2.4s ease-in-out infinite alternate;
+  will-change: opacity;
+}
+@keyframes halo-breathe { from { opacity: 0.45; } to { opacity: 1; } }
+.scene-track { background: rgba(31, 42, 54, 0.12); }
+.scene-fill { transform-origin: 0 50%; transition: transform 700ms var(--ease); will-change: transform; }
+.scene-sheen {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: scan-travel 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-in, .swap-in { animation: fade-in 200ms linear backwards; }
+  .scan-halo, .scene-sheen { animation: none; }
+}

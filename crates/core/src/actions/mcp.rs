@@ -1,5 +1,6 @@
-//! MCP on/off per config entry and copy to another agent (Gate 3 switch table).
-//! - Cursor, Gemini, Copilot: stash (remove the member, keep its exact text).
+//! MCP on/off per config entry, remove, and copy to another agent. Every
+//! write lands in the agent's own config file.
+//! - Cursor, Gemini, Copilot: no off switch; remove the entry (Undo puts it back).
 //! - OpenCode: native `enabled`. Codex: native `enabled` in `[mcp_servers.x]`.
 //! - Repo `.mcp.json`: `disabledMcpjsonServers` in `.claude/settings.local.json`.
 //! - `~/.claude.json` and plugin servers: refused with the switch that exists.
@@ -8,7 +9,6 @@
 //! target file; values never reach the UI (plans go out redacted).
 
 use super::hooks::{set_toml_enabled, toml_quote};
-use super::stash::{self, McpStashEntry};
 use super::{new_id, ActionPlan, ActionRequest, FileOp};
 use crate::adapters;
 use crate::core::Core;
@@ -61,31 +61,7 @@ fn server_name(core: &Core, id: &ItemId) -> Result<(String, String), AppError> {
 pub fn set_enabled(core: &Core, req: ActionRequest, id: &ItemId, entry: &str, on: bool) -> Result<ActionPlan, AppError> {
     let (name, _) = server_name(core, id)?;
     let env = &core.env;
-    let (stash_text, mut stash_file) = stash::load(env)
-        .map_err(|e| AppError::new(ErrorKind::Parse, format!("{} is not valid JSON ({e}).", stash::path(env).display())))?;
     let mut ops = Vec::new();
-
-    if let Some(i) = stash_file.mcp.iter().position(|e| e.entry == entry) {
-        if !on {
-            return Err(invalid("This server is already off here."));
-        }
-        let e = stash_file.mcp.remove(i);
-        let before = read(&e.file)?.ok_or_else(|| invalid(format!("{} is gone, so the server cannot go back.", e.file.display())))?;
-        let after = json_span::insert_member_at(&before, &segs(&e.path), e.index, &e.text, &e.cut)
-            .or_else(|| {
-                // The container is gone: recreate it with this one server.
-                let parent = &e.path[..e.path.len().saturating_sub(1)];
-                let key = e.path.last()?;
-                json_span::set_member(&before, &segs(parent), key, &format!("{{{}}}", e.text))
-            })
-            .ok_or_else(|| unsafe_edit(&e.file))?;
-        valid_json(&e.file, &after)?;
-        ops.push(FileOp::edit_text(e.file.clone(), Some(&before), Some(&after)));
-        let agent = e.agent.clone();
-        push_stash(&mut ops, env, stash_text.as_deref(), &stash_file);
-        return Ok(plan(req, format!("Turned on {name} for {}", display(&agent)), &agent, ops));
-    }
-
     let raw = scan::configured(env)
         .into_iter()
         .find(|r| r.entry() == entry)
@@ -109,24 +85,10 @@ pub fn set_enabled(core: &Core, req: ActionRequest, id: &ItemId, entry: &str, on
             )))
         }
         Format::Json => {
-            let before = read(&path)?.ok_or_else(|| unsafe_edit(&path))?;
-            let (after, index, text, cut) =
-                json_span::remove_member_cut(&before, &segs(&raw.path), &raw.name).ok_or_else(|| unsafe_edit(&path))?;
-            valid_json(&path, &after)?;
-            ops.push(FileOp::edit_text(path.clone(), Some(&before), Some(&after)));
-            stash_file.mcp.push(McpStashEntry {
-                entry: entry.to_string(),
-                agent: raw.agent.to_string(),
-                file: path.clone(),
-                path: raw.path.clone(),
-                name: raw.name.clone(),
-                index,
-                text,
-                cut,
-                project: raw.project.clone(),
-                stashed_at: chrono::Utc::now().to_rfc3339(),
-            });
-            push_stash(&mut ops, env, stash_text.as_deref(), &stash_file);
+            return Err(invalid(format!(
+                "{} has no off switch for one server. Remove it instead; Undo puts it back.",
+                display(raw.agent)
+            )))
         }
         Format::OpenCode => {
             let before = read(&path)?.ok_or_else(|| unsafe_edit(&path))?;
@@ -179,11 +141,34 @@ pub fn set_enabled(core: &Core, req: ActionRequest, id: &ItemId, entry: &str, on
     Ok(plan(req, format!("{verb} {name} for {}{where_}", display(raw.agent)), raw.agent, ops))
 }
 
-fn push_stash(ops: &mut Vec<FileOp>, env: &crate::env::Env, before: Option<&str>, file: &stash::StashFile) {
-    let after = stash::render(file);
-    if after.as_deref() != before {
-        ops.push(FileOp::edit_text(stash::path(env), before, after.as_deref()));
+/// Takes one config entry out of its JSON file. Undo puts the file back.
+pub fn remove(core: &Core, req: ActionRequest, id: &ItemId, entry: &str) -> Result<ActionPlan, AppError> {
+    let (name, _) = server_name(core, id)?;
+    let raw = scan::configured(&core.env)
+        .into_iter()
+        .find(|r| r.entry() == entry)
+        .ok_or_else(|| AppError::new(ErrorKind::NotFound, "This config entry changed. Rescan and try again."))?;
+    match raw.format {
+        Format::Json | Format::OpenCode | Format::McpJson => {}
+        Format::ClaudeJson => {
+            let scope = if raw.project.is_some() { " -s local" } else { " -s user" };
+            return Err(invalid(format!(
+                "Claude keeps this server in ~/.claude.json, which it rewrites while running. Use `claude mcp remove{scope} {}`.",
+                raw.name
+            )));
+        }
+        Format::Plugin => {
+            return Err(invalid(format!("This server comes with the plugin {}. Remove the plugin instead.", raw.plugin.clone().unwrap_or_default())))
+        }
+        Format::CodexToml => return Err(invalid(format!("Use `codex mcp remove {}`, or turn it off here.", raw.name))),
     }
+    let path = raw.file.clone();
+    let before = read(&path)?.ok_or_else(|| unsafe_edit(&path))?;
+    let (after, _, _, _) = json_span::remove_member_cut(&before, &segs(&raw.path), &raw.name).ok_or_else(|| unsafe_edit(&path))?;
+    valid_json(&path, &after)?;
+    let mut p = plan(req, format!("Removed {name} from {}", display(raw.agent)), raw.agent, vec![FileOp::edit_text(path, Some(&before), Some(&after))]);
+    p.needs_confirm = true;
+    Ok(p)
 }
 
 fn plan(req: ActionRequest, summary: String, agent: &str, ops: Vec<FileOp>) -> ActionPlan {
@@ -390,7 +375,7 @@ mod tests {
     const CURSOR: &str = "{\n  \"mcpServers\": {\n    \"kite\": { \"command\": \"npx\", \"args\": [\"kite\"] },\n    \"ctx\": {\n      \"url\": \"https://ctx.example/mcp?token=QUERYSECRET123\",\n      \"headers\": { \"API_KEY\": \"sk-SECRET-VALUE-0123456789abcdef\" }\n    }\n  }\n}\n";
 
     /// Key values from config files never reach the item cache or the plan the
-    /// UI receives; turning the entry off then on gives the file back exactly.
+    /// UI receives; removing the entry then Undo gives the file back exactly.
     #[test]
     fn secret_value_never_in_item_or_ipc_payload() {
         let tmp = tempfile::tempdir().unwrap();
@@ -408,16 +393,18 @@ mod tests {
         assert_eq!(f.locations[0].header_keys, vec!["API_KEY".to_string()]);
 
         let entry = f.locations[0].entry.clone();
-        let plan = core.action_plan(ActionRequest::McpSetEnabled { id: ctx.id.clone(), entry: entry.clone(), on: false }).unwrap();
+        // Cursor has no off switch: "off" is refused, and nothing is written.
+        let off = core.action_plan(ActionRequest::McpSetEnabled { id: ctx.id.clone(), entry: entry.clone(), on: false });
+        assert_eq!(off.unwrap_err().kind, ErrorKind::InvalidInput);
+
+        let plan = core.action_plan(ActionRequest::McpRemove { id: ctx.id.clone(), entry }).unwrap();
         let ui = serde_json::to_string(&plan.redacted()).unwrap();
         assert!(!ui.contains("SECRET"), "plan sent to the UI holds a key value");
         let rec = core.action_apply(&plan.id).unwrap();
         assert!(!serde_json::to_string(&rec.redacted()).unwrap().contains("SECRET"));
         assert!(!std::fs::read_to_string(home.join(".cursor/mcp.json")).unwrap().contains("ctx"));
 
-        crate::scan::rescan_config(&core, &crate::scan::NoSink).unwrap();
-        let plan = core.action_plan(ActionRequest::McpSetEnabled { id: ctx.id.clone(), entry, on: true }).unwrap();
-        core.action_apply(&plan.id).unwrap();
+        core.action_undo(&rec.id).unwrap();
         assert_eq!(std::fs::read_to_string(home.join(".cursor/mcp.json")).unwrap(), CURSOR);
     }
 }

@@ -2,7 +2,7 @@
 import type { InstallPreview } from "./InstallPreview";
 
 /**
- * A downloaded skill, ready for the library install action.
+ * A downloaded skill, ready for the skill install action.
  */
 export type MarketFetched = { preview: InstallPreview, 
 /**

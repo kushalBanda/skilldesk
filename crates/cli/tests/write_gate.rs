@@ -48,7 +48,7 @@ fn cli_write_without_yes_changes_nothing() {
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(dir.join("SKILL.md"), format!("---\nname: {name}\n---\nbody\n")).unwrap();
     };
-    let lib = home.join(".skilldesk/skills/demo");
+    let lib = home.join("elsewhere/demo");
     skill_md(&lib, "demo");
     std::fs::create_dir_all(home.join(".claude/skills")).unwrap();
     std::fs::create_dir_all(home.join(".cursor/skills")).unwrap();

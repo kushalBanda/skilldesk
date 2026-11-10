@@ -3,4 +3,4 @@
 /**
  * How a hook can be switched off (Gate 3 write table).
  */
-export type SwitchKind = "native" | "stash" | "plugin" | "none";
+export type SwitchKind = "native" | "remove" | "plugin" | "none";

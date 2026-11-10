@@ -4,19 +4,23 @@ import { PageHeader } from "../components/PageHeader";
 import { AgentLogo, AgentStack } from "../components/AgentLogo";
 import { StatTiles, type StatItem } from "../components/StatTiles";
 import type React from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Overview } from "../ipc/bindings/Overview";
 import type { Fix } from "../ipc/bindings/Fix";
 import type { Item } from "../ipc/bindings/Item";
+import type { ItemKind } from "../ipc/bindings/ItemKind";
+import type { ScanStage } from "../ipc/bindings/ScanStage";
 import { getErrorMessage } from "../ipc/error";
-import { useFixes, useItems, useScanning } from "../ipc/queries";
+import { useFixes, useItems, useScanStages, useScanning } from "../ipc/queries";
+import { revealSections, sweepGrid } from "../lib/motion";
+import { itemRoute, withParams } from "../lib/routes";
 import { formatCount } from "../lib/format";
 import { agentColor } from "../lib/series";
 import { urgency } from "./Fixes";
-import { t } from "../strings";
+import { kindLabel, t } from "../strings";
 
-type Props = { data: Overview | undefined; error: unknown; loading: boolean };
+type Props = { data: Overview | undefined; error: unknown; loading: boolean; reveal?: boolean };
 
 const MON: readonly string[] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DOW: readonly string[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -60,11 +64,23 @@ function buildDays(o: Overview, range: number): Day[] {
   return out;
 }
 
-export function Dashboard({ data, error, loading }: Props) {
+export function Dashboard({ data, error, loading, reveal = false }: Props) {
   const [range, setRange] = useState(0);
   const [agent, setAgent] = useState<string | null>(null);
   const [moreChips, setMoreChips] = useState(false);
   const scanning = useScanning();
+  const body = useRef<HTMLElement>(null);
+  const hasPrompts = !!data?.activity.length;
+  // First run: as the discovery scene lifts away, the sections rise in and
+  // the activity grid wipes in (lib/motion "Act 3"). Once only.
+  const [sweep, setSweep] = useState(false);
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (!reveal || revealed.current) return;
+    revealed.current = true;
+    if (hasPrompts) setSweep(true);
+    revealSections(body.current);
+  }, [reveal, hasPrompts]);
 
   const allDays = useMemo(() => (data ? buildDays(data, range) : []), [data, range]);
   const days = useMemo(
@@ -84,7 +100,7 @@ export function Dashboard({ data, error, loading }: Props) {
   const shown = moreChips ? promptAgents : promptAgents.slice(0, CHIPS_SHOWN);
 
   return (
-    <section className="flex w-full max-w-[1680px] flex-col gap-6">
+    <section ref={body} className="flex w-full max-w-[1680px] flex-col gap-6">
       <PageHeader title={t.dashboard} />
       {error ? (
         <p role="alert" className="text-danger">
@@ -93,10 +109,17 @@ export function Dashboard({ data, error, loading }: Props) {
       ) : null}
       {loading || !data ? null : !data.activity.length ? (
         <>
-          <p className="m-0 rounded-card bg-panel px-5 py-4 text-[13.5px] text-ink-2">{scanning ? t.readingSessions : t.noPromptsFound}</p>
-          <Attention />
-          <Skills agent={null} />
-          <AgentTable data={data} days={[]} />
+          {scanning ? (
+            // First scan: only what is found so far; the rest rises in with the prompts.
+            <FirstScan data={data} />
+          ) : (
+            <>
+              <p className="m-0 rounded-card bg-panel px-5 py-4 text-[13.5px] text-ink-2">{t.noPromptsFound}</p>
+              <Attention />
+              <Skills agent={null} />
+              <AgentTable data={data} days={[]} />
+            </>
+          )}
         </>
       ) : (
         <>
@@ -146,6 +169,7 @@ export function Dashboard({ data, error, loading }: Props) {
           </div>
           <Totals data={data} days={days} agent={agent} range={range} />
           <Calendar
+            sweep={sweep}
             name={name}
             days={days}
             hours={range === 0 ? data.hours.filter((h) => !agent || h.agent === agent) : null}
@@ -211,7 +235,7 @@ function Totals({ data, days, agent, range }: { data: Overview; days: Day[]; age
       label: t.prompts,
       value: formatCount(total),
       hint: active ? t.perActiveDay(Math.round(total / active)) : t.noPromptsYetCell,
-      onClick: () => navigate("/sessions"),
+      onClick: () => navigate(withParams("/sessions", { agent: row?.agent })),
     },
     {
       label: t.activeDaysT,
@@ -226,11 +250,12 @@ function Totals({ data, days, agent, range }: { data: Overview; days: Day[]; age
       label: row ? t.skillsT : t.skillsUsedT,
       value: formatCount(row ? row.skills : (data.skills_used ?? 0)),
       hint: t.skillsHint,
-      onClick: () => navigate("/skills?status=used"),
+      // An agent picked: its skills; all agents: the skills that ran.
+      onClick: () => navigate(row ? withParams("/skills", { agent: row.agent }) : "/skills?status=used"),
     });
     items.push(
       row
-        ? { label: t.sessionsLabel, value: formatCount(row.sessions), onClick: () => navigate("/sessions") }
+        ? { label: t.sessionsLabel, value: formatCount(row.sessions), onClick: () => navigate(withParams("/sessions", { agent: row.agent })) }
         : {
             label: t.agentsT,
             value: formatCount(agentKeys.length),
@@ -243,13 +268,31 @@ function Totals({ data, days, agent, range }: { data: Overview; days: Day[]; age
   return <StatTiles label={t.prompts} items={items} min={190} />;
 }
 
-function Calendar({ days, hours, rangeText, name }: { days: Day[]; hours: Overview["hours"] | null; rangeText: string; name: (k: string) => string }) {
+function Calendar({
+  days,
+  hours,
+  rangeText,
+  name,
+  sweep = false,
+}: {
+  days: Day[];
+  hours: Overview["hours"] | null;
+  rangeText: string;
+  name: (k: string) => string;
+  sweep?: boolean;
+}) {
   // Hovered or keyboard-focused day (index into `days`).
   const [tip, setTip] = useState<number | null>(null);
   const [focused, setFocused] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
+  const padN = days[0]?.dow ?? 0;
+  const swept = useRef(false);
+  useEffect(() => {
+    if (!sweep || swept.current || !days.length) return;
+    swept.current = true;
+    sweepGrid(gridRef.current);
+  }, [sweep, days.length]);
   if (!days.length) return null;
-  const padN = days[0]!.dow;
   const weeks = Math.ceil((days.length + padN) / 7);
   // Cells grow with the card (capped, so a 30-day range is not huge).
   const cell = 36;
@@ -679,15 +722,21 @@ function Skills({ agent }: { agent: string | null }) {
           <h2 id="sk-h" className={h2}>
             {t.topSkills}
           </h2>
-          <Link to="/skills" className={more}>
+          <Link to={withParams("/skills", { agent })} className={more}>
             {t.allN(all.filter((s) => s.status.state !== "gone" && s.status.state !== "not_an_item").length)}
           </Link>
         </div>
         {q.isSuccess && !ran.length ? <p className="m-0 text-[12.5px] text-ink-3">{t.noSkillRuns}</p> : null}
         <div className="flex flex-col gap-1.5">
           {ran.slice(0, LIST_ROWS).map((s) => (
-            <div key={s.id} className="grid min-h-9 grid-cols-[minmax(0,1fr)_72px] items-center gap-3">
-              <span className="relative block h-9 overflow-hidden rounded-[10px] bg-panel">
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => navigate(itemRoute(s))}
+              title={t.openItem(s.name)}
+              className="group grid min-h-9 w-full grid-cols-[minmax(0,1fr)_72px] items-center gap-3 rounded-[10px] text-left transition-transform duration-100 active:scale-[0.985]"
+            >
+              <span className="relative block h-9 overflow-hidden rounded-[10px] bg-panel transition-colors duration-100 group-hover:bg-sunk">
                 <i
                   className="absolute inset-y-0 left-0 min-w-2 rounded-[10px]"
                   style={{ width: `${((s.usage?.count ?? 0) / max) * 100}%`, background: "var(--heat-1)" }}
@@ -698,7 +747,7 @@ function Skills({ agent }: { agent: string | null }) {
                 {formatCount(s.usage?.count ?? 0)}
                 <small className="block text-[11.5px] font-normal text-ink-3">{t.runsL}</small>
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </section>
@@ -708,7 +757,7 @@ function Skills({ agent }: { agent: string | null }) {
             {t.neverRan}
           </h2>
           {never.length ? (
-            <Link to="/skills" className={more}>
+            <Link to={withParams("/skills", { status: "unused", agent })} className={more}>
               {t.skillsN(never.length)}
             </Link>
           ) : null}
@@ -720,7 +769,8 @@ function Skills({ agent }: { agent: string | null }) {
               <span className="truncate text-[13.5px] font-semibold">{s.name}</span>
               <button
                 type="button"
-                onClick={() => navigate("/skills")}
+                onClick={() => navigate(itemRoute(s))}
+                aria-label={`${t.review} ${s.name}`}
                 className="col-start-2 row-span-2 row-start-1 h-8 rounded-full bg-bg px-3 text-[13px] font-semibold ring-1 ring-rule hover:bg-sunk active:scale-[0.97]"
               >
                 {t.review}
@@ -822,9 +872,30 @@ function AgentTable({ data, days }: { data: Overview; days: Day[] }) {
                       </span>
                     )}
                   </td>
-                  {[r.skills, ...(isDeep ? [r.hooks, r.mcp, r.sessions] : [null, null, null])].map((n, i) => (
-                    <td key={i} className={["tnum pr-4 text-right last:pr-0", n === 0 || n === null ? muted : ""].join(" ")}>
-                      {n === null ? "—" : formatCount(n)}
+                  {/* A count opens that agent's list. */}
+                  {[
+                    { n: r.skills, to: "/skills" },
+                    ...(isDeep
+                      ? [
+                          { n: r.hooks, to: "/hooks" },
+                          { n: r.mcp, to: "/mcp" },
+                          { n: r.sessions, to: "/sessions" },
+                        ]
+                      : [null, null, null]),
+                  ].map((c, i) => (
+                    <td key={i} className={["tnum pr-4 text-right last:pr-0", !c || c.n === 0 ? muted : ""].join(" ")}>
+                      {!c ? (
+                        "—"
+                      ) : c.to && c.n > 0 ? (
+                        <Link
+                          to={withParams(c.to, { agent: r.agent })}
+                          className="rounded-[4px] underline decoration-transparent underline-offset-[3px] transition-colors duration-100 hover:text-accent-text hover:decoration-current"
+                        >
+                          {formatCount(c.n)}
+                        </Link>
+                      ) : (
+                        formatCount(c.n)
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -833,6 +904,74 @@ function AgentTable({ data, days }: { data: Overview; days: Day[] }) {
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+const STAGES: { key: ScanStage; label: string }[] = [
+  { key: "config", label: t.stageConfig },
+  { key: "transcripts", label: t.stageSessions },
+  { key: "deep", label: t.stageDeep },
+];
+const FOUND: { kind: ItemKind; to: string }[] = [
+  { kind: "skill", to: "/skills" },
+  { kind: "plugin", to: "/plugins" },
+  { kind: "hook", to: "/hooks" },
+  { kind: "mcp_server", to: "/mcp" },
+  { kind: "subagent", to: "/subagents" },
+  { kind: "memory", to: "/memory" },
+];
+
+/**
+ * First scan, before any prompt is read: what is found so far, counting up in
+ * place as each stage lands, over a stage list with a running bar. Gives way
+ * to the full Dashboard when the prompts arrive.
+ */
+function FirstScan({ data }: { data: Overview }) {
+  const stages = useScanStages();
+  const scanning = useScanning();
+  const running = scanning ? STAGES.find((s) => !stages.includes(s.key))?.key : undefined;
+  const count = (k: ItemKind) => data.kinds.find((c) => c.kind === k)?.count ?? 0;
+  const agents = data.agents.filter((a) => a.tier !== "shared");
+  const items: StatItem[] = [
+    {
+      label: t.agentsT,
+      value: formatCount(agents.length),
+      aside: agents.length ? <AgentStack agents={agents.map((a) => a.key)} name={(k) => agents.find((a) => a.key === k)?.display_name ?? k} size={26} card={false} /> : undefined,
+    },
+    ...FOUND.map((f) => ({ label: kindLabel[f.kind], value: formatCount(count(f.kind)), to: f.to })),
+  ];
+  return (
+    <section aria-labelledby="first-h" aria-busy={scanning} className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+        <h2 id="first-h" className="m-0 text-[20px] font-bold tracking-[-0.03em]">
+          {scanning ? t.readingThisMac : t.foundOnThisMac}
+        </h2>
+        <ol className="m-0 flex list-none flex-wrap items-center gap-x-4 gap-y-1 p-0 text-[12.5px]">
+          {STAGES.map((s) => {
+            const done = stages.includes(s.key);
+            const now = s.key === running;
+            return (
+              <li key={s.key} className={["inline-flex items-center gap-1.5 transition-colors duration-200", done ? "text-ink-2" : now ? "text-ink" : "text-ink-3"].join(" ")}>
+                {done ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" className="stage-check text-ok">
+                    <path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <i className={["h-1.5 w-1.5 rounded-full", now ? "animate-pulse bg-accent" : "bg-rule"].join(" ")} aria-hidden="true" />
+                )}
+                {s.label}
+                <span className="sr-only">{done ? t.stageDone : now ? t.stageRunning : t.stageQueued}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <div className={["scan-bar h-1 overflow-hidden rounded-full bg-rule-2", scanning ? "" : "opacity-0"].join(" ")} aria-hidden="true">
+        <span className="block h-full w-full rounded-full" />
+      </div>
+      <StatTiles label={t.foundOnThisMac} items={items} min={150} />
+      <p className="m-0 text-[13px] text-ink-3">{scanning ? t.readingSessions : t.noPromptsFound}</p>
     </section>
   );
 }

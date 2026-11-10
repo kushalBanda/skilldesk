@@ -7,7 +7,7 @@ mod core;
 pub mod env;
 pub mod error;
 pub mod fsx;
-pub mod library;
+pub mod install;
 pub mod model;
 pub mod net;
 pub mod parse;

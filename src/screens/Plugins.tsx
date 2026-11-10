@@ -17,6 +17,7 @@ import { FChip } from "../components/FChip";
 import { Switch } from "../components/Switch";
 import { DetailSheet, SheetSteps } from "../components/DetailSheet";
 import { formatCount, formatDate, formatBytes, tildePath } from "../lib/format";
+import { PluginContents } from "../components/PlaceLink";
 import { t } from "../strings";
 
 type View = "plugins" | "marketplaces" | "cache";
@@ -35,6 +36,7 @@ export function Plugins() {
     setView((params.get("view") as View) ?? "plugins");
     setStatus((params.get("status") as StatusFilter) ?? "all");
     setSelectedId(params.get("id"));
+    setAgent(params.get("agent"));
   }, [params]);
 
   const plugins = useItems("plugin");
@@ -45,7 +47,7 @@ export function Plugins() {
   const selected = (plugins.data ?? []).find((p) => p.id === selectedId) ?? null;
   const { sort, toggle: onSort } = useSort<PluginKey>();
   const [query, setQuery] = useState("");
-  const [agent, setAgent] = useState<string | null>(null);
+  const [agent, setAgent] = useState<string | null>(params.get("agent"));
   const shownPlugins = (plugins.data ?? []).filter((p) => matches(p, query) && (!agent || p.agents.includes(agent)));
 
   const unusedMarkets = (markets.data ?? []).filter((m) => m.status.state === "unused");
@@ -386,21 +388,10 @@ function PluginSheet({ item, onClose }: { item: Item; onClose: () => void }) {
           {t.readOnlyPlugin(agentName(agentList, item.agents[0] ?? ""))}
         </p>
       ) : null}
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3">
-        <div hidden={!isClaude(item) && !item.usage}>
-          <dt className="text-[12.5px] font-semibold text-ink-3">{t.uses}</dt>
-          <dd className="tnum m-0 text-[22px] font-bold">{formatCount(Number(item.usage?.count ?? 0))}</dd>
-        </div>
-        {item.usage?.last_used ? (
-          <div>
-            <dt className="text-[12.5px] font-semibold text-ink-3">{t.colLastUsed}</dt>
-            <dd className="m-0 text-[22px] font-bold">{formatDate(item.usage.last_used)}</dd>
-          </div>
-        ) : null}
-      </dl>
       {f.installed ? (
         <>
           {contentsLine(f) ? <p className="mt-4 text-ink-2">{contentsLine(f)}</p> : null}
+          <PluginContents pluginId={f.id} />
           {f.install_path ? (
             <div className="selectable mt-4 break-all rounded-row bg-panel px-3 py-2 font-mono text-[12.5px]">{tildePath(f.install_path)}</div>
           ) : null}

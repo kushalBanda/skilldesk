@@ -76,10 +76,6 @@ fn roots(core: &Core) -> Vec<(PathBuf, RecursiveMode)> {
             }
         }
     }
-    let lib = crate::library::library_dir(env);
-    if lib.is_dir() && !out.iter().any(|(r, m)| *m == RecursiveMode::Recursive && lib.starts_with(r)) {
-        out.push((lib, RecursiveMode::Recursive));
-    }
     out
 }
 

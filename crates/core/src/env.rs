@@ -41,9 +41,10 @@ impl Env {
         }
     }
 
-    /// `~/.skilldesk`: SkillDesk's user-visible folder (library, disabled items).
-    pub fn skilldesk_dir(&self) -> PathBuf {
-        self.home.join(".skilldesk")
+    /// Scratch copies for installs not yet applied (inside the data dir; never
+    /// read by an agent).
+    pub fn staging_dir(&self) -> PathBuf {
+        self.data_dir.join("staging")
     }
 
     pub fn db_path(&self) -> PathBuf {

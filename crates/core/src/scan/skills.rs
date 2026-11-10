@@ -29,7 +29,6 @@ pub struct SkillScan {
 #[derive(Default)]
 struct Row {
     locations: Vec<SkillLocation>,
-    library: Option<PathBuf>,
     /// First real copy: (canonical dir, frontmatter description).
     home: Option<(PathBuf, Option<String>)>,
 }
@@ -41,22 +40,6 @@ pub fn scan(env: &Env) -> SkillScan {
 
     let mut rows: BTreeMap<String, Row> = BTreeMap::new();
     let mut not_skills: Vec<Item> = Vec::new();
-
-    // Library first: its copy is the home every link resolves to.
-    if let Some(lib) = crate::library::canonical_library_dir(env) {
-        for found in detect::list_dir(&lib, false) {
-            if let Found::Skill { path } = found {
-                if std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_symlink()) {
-                    continue;
-                }
-                let meta = detect::read_meta(&path);
-                let name = meta.name.as_deref().map(|n| claude::bare_name(n).to_string()).unwrap_or_else(|| file_name(&path));
-                let row = rows.entry(name).or_default();
-                row.home = Some((path.clone(), meta.description));
-                row.library = Some(path);
-            }
-        }
-    }
 
     let mut add_skill = |path: PathBuf, agents: &[AgentKey], project: Option<PathBuf>, plugin: Option<PluginRef>| {
         let home = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
@@ -156,7 +139,7 @@ pub fn scan(env: &Env) -> SkillScan {
             status,
             sources: vec![SourceRef { path: detect::marker_file(&home).unwrap_or_else(|| home.clone()), line: None }],
             usage: used.map(to_usage),
-            facts: KindFacts::Skill(SkillFacts { description, home, locations: row.locations.clone(), library: row.library.clone() }),
+            facts: KindFacts::Skill(SkillFacts { description, home, locations: row.locations.clone() }),
         });
     }
 
@@ -174,7 +157,7 @@ pub fn scan(env: &Env) -> SkillScan {
                 status: ItemStatus::Gone,
                 sources: vec![SourceRef { path: claude_json.clone(), line: None }],
                 usage: Some(to_usage(count)),
-                facts: KindFacts::Skill(SkillFacts { description: None, home: claude_json.clone(), locations: vec![], library: None }),
+                facts: KindFacts::Skill(SkillFacts { description: None, home: claude_json.clone(), locations: vec![] }),
             });
         }
     }
@@ -232,7 +215,6 @@ fn not_a_skill(agents: &[AgentKey], path: &Path) -> Item {
                 project: None,
                 plugin: None,
             }],
-            library: None,
         }),
     }
 }

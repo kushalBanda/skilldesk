@@ -1,11 +1,11 @@
 //! Settings (DESIGN.md §7.19): which agents SkillDesk reads, custom agents,
-//! the library folder, and the `skilldesk` command in `~/.skilldesk/bin`.
+//! and the `skilldesk` command in `~/.local/bin`.
 //! These are SkillDesk's own settings; no agent file changes here.
 
 use crate::adapters::{self, CustomAgent};
 use crate::core::Core;
 use crate::error::{AppError, ErrorKind};
-use crate::model::{AgentKey, AgentSetting, AgentTier, CliState, CliStatus, ItemKind, ItemStatus, KindFacts, SettingsData};
+use crate::model::{AgentKey, AgentSetting, AgentTier, CliState, CliStatus, ItemKind, ItemStatus, SettingsData};
 use sha2::{Digest, Sha256};
 use std::path::{Component, Path, PathBuf};
 
@@ -59,13 +59,9 @@ impl Core {
     pub fn settings(&self) -> Result<SettingsData, AppError> {
         let found: Vec<&str> = adapters::installed(&self.env).iter().map(|a| a.key).collect();
         let mut skills: std::collections::HashMap<String, u32> = Default::default();
-        let mut library_skills = 0;
         for item in self.store.items(ItemKind::Skill)? {
             if matches!(item.status, ItemStatus::Gone | ItemStatus::NotAnItem) {
                 continue;
-            }
-            if matches!(&item.facts, KindFacts::Skill(f) if f.library.is_some()) {
-                library_skills += 1;
             }
             for a in &item.agents {
                 *skills.entry(a.0.clone()).or_default() += 1;
@@ -91,7 +87,7 @@ impl Core {
             })
             .collect();
         agents.sort_by(|a, b| b.found.cmp(&a.found).then(b.custom.cmp(&a.custom)).then(a.tier.cmp(&b.tier)).then(b.skills.cmp(&a.skills)).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
-        Ok(SettingsData { agents, custom, library_dir: crate::library::library_dir(&self.env), library_skills })
+        Ok(SettingsData { agents, custom })
     }
 
     /// The read switch. Takes effect with the next scan.
@@ -130,9 +126,8 @@ impl Core {
         if dir == home || dir.parent().is_none() {
             return Err(invalid("Choose the agent's skills folder, not the home folder."));
         }
-        let lib = crate::library::library_dir(&self.env);
-        if crate::library::overlaps(&dir, &lib) || crate::library::canonical_library_dir(&self.env).is_some_and(|l| crate::library::overlaps(&dir, &l)) {
-            return Err(invalid("That folder is the SkillDesk library or inside it."));
+        if crate::install::overlaps(&dir, &self.env.data_dir) {
+            return Err(invalid("That folder is SkillDesk's own data folder or inside it."));
         }
         let project_dir = project_dir.map(str::trim).filter(|s| !s.is_empty()).map(|s| s.trim_end_matches('/').to_string());
         if let Some(p) = &project_dir {
@@ -178,10 +173,11 @@ impl Core {
 
 // ---- The `skilldesk` command -------------------------------------------------
 
-const STAMP: &str = ".skilldesk-cli.json";
+/// Stamp of the copy SkillDesk installed, kept in SkillDesk's data folder.
+const STAMP: &str = "cli-stamp.json";
 
 fn bin_dir(core: &Core) -> PathBuf {
-    core.env.skilldesk_dir().join("bin")
+    core.env.home.join(".local/bin")
 }
 
 fn sha(path: &Path) -> Option<String> {
@@ -189,18 +185,18 @@ fn sha(path: &Path) -> Option<String> {
     Some(hex::encode(Sha256::digest(&bytes)))
 }
 
-fn stamp_hash(dir: &Path) -> Option<String> {
-    let t = std::fs::read_to_string(dir.join(STAMP)).ok()?;
+fn stamp_hash(core: &Core) -> Option<String> {
+    let t = std::fs::read_to_string(core.env.data_dir.join(STAMP)).ok()?;
     let v: serde_json::Value = serde_json::from_str(&t).ok()?;
     v.get("sha256")?.as_str().map(str::to_string)
 }
 
-/// Shell start files that already put `~/.skilldesk/bin` on PATH (read only).
+/// Shell start files that already put `~/.local/bin` on PATH (read only).
 fn on_path(core: &Core) -> bool {
     [".zshrc", ".zprofile", ".zshenv", ".bash_profile", ".bashrc", ".profile", ".config/fish/config.fish"]
         .iter()
         .filter_map(|f| std::fs::read_to_string(core.env.home.join(f)).ok())
-        .any(|t| t.lines().any(|l| !l.trim_start().starts_with('#') && l.contains(".skilldesk/bin")))
+        .any(|t| t.lines().any(|l| !l.trim_start().starts_with('#') && l.contains(".local/bin")))
 }
 
 impl Core {
@@ -210,7 +206,7 @@ impl Core {
         let path = dir.join("skilldesk");
         let have = sha(&path);
         let new = source.and_then(sha);
-        let state = match (&have, stamp_hash(&dir)) {
+        let state = match (&have, stamp_hash(self)) {
             (None, _) => CliState::NotInstalled,
             (Some(h), Some(s)) if *h == s => {
                 if new.as_ref().is_some_and(|n| n != h) {
@@ -226,11 +222,11 @@ impl Core {
             path,
             bundled: new.is_some(),
             on_path: on_path(self),
-            path_line: r#"export PATH="$HOME/.skilldesk/bin:$PATH""#.to_string(),
+            path_line: r#"export PATH="$HOME/.local/bin:$PATH""#.to_string(),
         }
     }
 
-    /// Copies the command to `~/.skilldesk/bin/skilldesk` and stamps it. A file
+    /// Copies the command to `~/.local/bin/skilldesk` and stamps it. A file
     /// there that SkillDesk did not put there goes to the Trash first.
     pub fn cli_install(&self, source: &Path) -> Result<CliStatus, AppError> {
         let io = |what: &str, p: &Path, e: std::io::Error| AppError::new(ErrorKind::Io, format!("Cannot {what} {}: {e}", p.display()));
@@ -255,7 +251,8 @@ impl Core {
         }
         std::fs::rename(&tmp, &dest).map_err(|e| io("install", &dest, e))?;
         let stamp = serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "sha256": hash, "installed_at": chrono::Utc::now().to_rfc3339() });
-        std::fs::write(dir.join(STAMP), stamp.to_string()).map_err(|e| io("write", &dir.join(STAMP), e))?;
+        let stamp_path = self.env.data_dir.join(STAMP);
+        std::fs::write(&stamp_path, stamp.to_string()).map_err(|e| io("write", &stamp_path, e))?;
         Ok(self.cli_status(Some(source)))
     }
 }
