@@ -103,7 +103,6 @@ pub fn evaluate(inv: &Inventory) -> Vec<Fix> {
     slow_hooks(hooks, &mut out);
     dangling_links(skills, &mut out);
     never_run_skills(skills, &mut out);
-    duplicate_skills(skills, &mut out);
     duplicate_memories(&inv.memories, &mut out);
     secrets_in_history(&inv.secrets, &mut out);
     if let Some(r) = &inv.storage {
@@ -149,6 +148,15 @@ fn reclaimable_disk(r: &crate::storage::StorageReport, out: &mut Vec<Fix>) {
         action_label: "Review cleanup".into(),
         link: "/cleanup".into(),
     });
+}
+
+/// A fix about one item opens that item's sheet; about several, the list
+/// filtered to them.
+fn one_or_all(list: &str, ids: &[ItemId]) -> String {
+    match ids {
+        [one] => format!("{list}&id={}", one.0),
+        _ => list.to_string(),
+    }
 }
 
 fn fmt_size(bytes: u64) -> String {
@@ -266,7 +274,12 @@ fn broken_hooks(hooks: &[Item], out: &mut Vec<Fix>) {
         let ids: Vec<ItemId> = list.iter().map(|h| h.id.clone()).collect();
         let switchable: Vec<ItemId> = list
             .iter()
-            .filter(|h| matches!(&h.facts, KindFacts::Hook(f) if matches!(f.switch, SwitchKind::Stash | SwitchKind::Native)))
+            .filter(|h| matches!(&h.facts, KindFacts::Hook(f) if f.switch == SwitchKind::Native))
+            .map(|h| h.id.clone())
+            .collect();
+        let removable: Vec<ItemId> = list
+            .iter()
+            .filter(|h| matches!(&h.facts, KindFacts::Hook(f) if f.switch == SwitchKind::Remove))
             .map(|h| h.id.clone())
             .collect();
         let events: Vec<String> = {
@@ -295,14 +308,17 @@ fn broken_hooks(hooks: &[Item], out: &mut Vec<Fix>) {
         } else {
             format!("{n} {name} hooks call a script that is gone.")
         };
-        let (action, action_label) = if switchable.is_empty() {
-            (None, "Show hooks".to_string())
-        } else {
+        let (action, action_label) = if !switchable.is_empty() {
             let k = switchable.len();
             (
                 Some(ActionRequest::HookSetEnabled { ids: switchable, on: false }),
                 format!("Disable {}", plural(k, "hook", "hooks")),
             )
+        } else if !removable.is_empty() {
+            let k = removable.len();
+            (Some(ActionRequest::HookRemove { ids: removable }), format!("Remove {}", plural(k, "hook", "hooks")))
+        } else {
+            (None, "Show hooks".to_string())
         };
         out.push(Fix {
             id: format!("broken_hooks:{agent}"),
@@ -390,46 +406,8 @@ fn dangling_links(skills: &[Item], out: &mut Vec<Fix>) {
         action: Some(ActionRequest::LinksRemoveDangling { ids: ids.clone() }),
         action_label: format!("Remove {}", plural(n, "link", "links")),
         // One skill: open it, so its dead link shows with its Remove button.
-        link: if ids.len() == 1 { format!("/skills?status=broken&id={}", ids[0].0) } else { "/skills?status=broken".into() },
+        link: one_or_all("/skills?status=broken", &ids),
         item_ids: ids,
-    });
-}
-
-/// Skills with more than one copy of their own (or a library copy plus
-/// copies): candidates for Adopt.
-fn duplicate_skills(skills: &[Item], out: &mut Vec<Fix>) {
-    let mut list: Vec<(&Item, usize)> = skills
-        .iter()
-        .filter_map(|s| match &s.facts {
-            crate::model::KindFacts::Skill(f) => {
-                let n = crate::library::adopt::own_copies(f).len() + usize::from(f.library.is_some());
-                (n >= 2).then_some((s, n))
-            }
-            _ => None,
-        })
-        .collect();
-    if list.is_empty() {
-        return;
-    }
-    list.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.name.cmp(&b.0.name)));
-    let (top, n) = list[0];
-    let ids: Vec<ItemId> = list.iter().map(|(s, _)| s.id.clone()).collect();
-    let k = list.len();
-    out.push(Fix {
-        id: "duplicate_skills".into(),
-        rule: "duplicate_skills".into(),
-        risk: 35,
-        title: format!("The same skill lives in {n} places."),
-        why: if k == 1 {
-            format!("{} has {n} separate copies. Keep one in the library and link it everywhere.", top.name)
-        } else {
-            format!("{} has {n} separate copies; {k} skills have 2 or more. Keep one copy each in the library.", top.name)
-        },
-        evidence: evidence(&ids),
-        item_ids: ids,
-        action: None,
-        action_label: "Adopt".into(),
-        link: format!("/adopt?id={}", top.id.0),
     });
 }
 
@@ -448,10 +426,10 @@ fn never_run_skills(skills: &[Item], out: &mut Vec<Fix>) {
         title: if n == 1 { "A Claude skill never ran.".into() } else { format!("{n} Claude skills never ran.") },
         why: format!("{}, per Claude's own usage counts.", list_names(&names, 3)),
         evidence: evidence(&ids),
+        link: one_or_all("/skills?status=unused", &ids),
         item_ids: ids,
         action: None,
         action_label: "Review".into(),
-        link: "/skills?status=unused".into(),
     });
 }
 
@@ -493,10 +471,10 @@ fn ghost_plugins(plugins: &[Item], out: &mut Vec<Fix>) {
         },
         why: format!("{}. No longer installed.", parts.join(" · ")),
         evidence: evidence(&ids),
+        link: one_or_all("/plugins?status=gone", &ids),
         item_ids: ids,
         action: None,
         action_label: "Reinstall or forget".into(),
-        link: "/plugins?status=gone".into(),
     });
 }
 
@@ -556,10 +534,10 @@ fn never_called_mcp(servers: &[Item], out: &mut Vec<Fix>) {
         title: if n == 1 { "An MCP server was never called.".into() } else { format!("{n} MCP servers were never called.") },
         why: format!("{}. Each one starts with Claude and adds its tools to every prompt.", list_names(&names, 4)),
         evidence: evidence(&ids),
+        link: one_or_all("/mcp?status=unused", &ids),
         item_ids: ids,
         action: None,
         action_label: "Review".into(),
-        link: "/mcp?status=unused".into(),
     });
 }
 

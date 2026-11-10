@@ -1,19 +1,19 @@
 //! Marketplace screen logic (ADR 0016): lists with an offline cache, download
 //! of one skill into SkillDesk's data folder, and update checks for skills
-//! installed from here. The install itself is the library install action
-//! (ADR 0015); this module only fetches and remembers where a download came from.
+//! installed from here. The install itself is the skill install action (a copy
+//! into each agent's folder); this module fetches, and records in SkillDesk's
+//! database where an installed skill came from.
 
 use super::skillssh::{self, Board, MarketSkill};
 use super::{github, site, Http};
 use crate::core::Core;
 use crate::error::{AppError, ErrorKind};
-use crate::library::{self, install::InstallPreview, LibrarySource};
+use crate::install::InstallPreview;
 use crate::model::{ItemKind, KindFacts};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
 
-pub const REGISTRY: &str = "skills.sh";
 /// Update checks per open: the unauthenticated GitHub limit is 60 an hour.
 const CHECKS_PER_OPEN: usize = 40;
 const RECHECK_SECS: i64 = 15 * 60;
@@ -23,7 +23,7 @@ const RECHECK_SECS: i64 = 15 * 60;
 #[ts(export)]
 pub enum RowState {
     Available,
-    /// In the library from this source; `update` once a check found a newer folder.
+    /// Installed from this source; `update` once a check found a newer folder.
     Installed { name: String, update: bool },
     /// A skill of this name is on this Mac but did not come from here.
     SameName { name: String },
@@ -55,11 +55,22 @@ struct Cached {
     skills: Vec<MarketSkill>,
 }
 
-/// A library skill whose sidecar says it came from the marketplace.
+/// Where a marketplace download came from (kept until it is installed).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarketOrigin {
+    pub source: String,
+    pub skill_id: String,
+    pub path: Option<String>,
+    pub revision: Option<String>,
+}
+
+const INSTALLED_KEY: &str = "market.installed";
+
+/// A skill installed from the marketplace (recorded in SkillDesk's database).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct InstalledSkill {
-    /// Library folder name.
+    /// Skill folder name in the agent folders.
     pub name: String,
     pub source: String,
     pub skill_id: String,
@@ -93,7 +104,7 @@ pub struct Updates {
     pub note: Option<String>,
 }
 
-/// A downloaded skill, ready for the library install action.
+/// A downloaded skill, ready for the skill install action.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct MarketFetched {
@@ -109,20 +120,38 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// Library skills installed from the marketplace (local reads only).
+fn recorded(core: &Core) -> Vec<InstalledSkill> {
+    core.store.setting(INSTALLED_KEY).ok().flatten().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+/// Skills installed from the marketplace that still have a folder in some
+/// agent (local reads only).
 pub fn installed(core: &Core) -> Vec<InstalledSkill> {
-    let Ok(lib) = library::checked_library_dir(&core.env) else { return Vec::new() };
-    let Ok(rd) = std::fs::read_dir(&lib) else { return Vec::new() };
-    let mut out: Vec<InstalledSkill> = rd
-        .flatten()
-        .filter_map(|e| {
-            let sc = library::read_sidecar(&e.path())?;
-            let LibrarySource::Marketplace { source, skill_id, path, revision, .. } = sc.source else { return None };
-            Some(InstalledSkill { name: e.file_name().to_string_lossy().into_owned(), source, skill_id, path, revision, installed_at: sc.installed_at })
+    let present: std::collections::HashSet<String> = core
+        .store
+        .items(ItemKind::Skill)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|i| match &i.facts {
+            KindFacts::Skill(f) if !f.locations.is_empty() => f.home.file_name().map(|n| n.to_string_lossy().into_owned()),
+            _ => None,
         })
         .collect();
+    let mut out: Vec<InstalledSkill> = recorded(core).into_iter().filter(|s| present.contains(&s.name)).collect();
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
+}
+
+/// After an install from a marketplace download: remember its source, so the
+/// Marketplace can show it as installed and check it for updates.
+pub(crate) fn record_install(core: &Core, from: &Path, name: &str) {
+    let Some(o) = core.origin_of(from) else { return };
+    let mut list = recorded(core);
+    list.retain(|s| s.name != name);
+    list.push(InstalledSkill { name: name.to_string(), source: o.source, skill_id: o.skill_id, path: o.path, revision: o.revision, installed_at: now() });
+    if let Ok(json) = serde_json::to_string(&list) {
+        let _ = core.store.set_setting(INSTALLED_KEY, &json);
+    }
 }
 
 fn cached_updates(core: &Core) -> Option<(String, Vec<(String, UpdateState)>)> {
@@ -138,7 +167,7 @@ fn rows(core: &Core, skills: Vec<MarketSkill>) -> Vec<MarketRow> {
         .unwrap_or_default()
         .into_iter()
         // Only skills with a folder on this Mac; usage-only ("gone") names do not clash.
-        .filter(|i| matches!(&i.facts, KindFacts::Skill(f) if !f.locations.is_empty() || f.library.is_some()))
+        .filter(|i| matches!(&i.facts, KindFacts::Skill(f) if !f.locations.is_empty()))
         .map(|i| i.name.to_ascii_lowercase())
         .collect();
     skills
@@ -251,7 +280,7 @@ fn prune(root: &Path) {
 }
 
 /// Downloads one skill to `<data>/downloads/<id>/<skill>` and returns what
-/// installing it would do. Nothing in the library or any agent folder changes.
+/// installing it would do. No agent folder changes.
 pub async fn fetch(core: &Core, source: &str, skill_id: &str) -> Result<MarketFetched, AppError> {
     let folder = crate::fsx::path_guard::sanitize_name(skill_id);
     if folder.is_empty() || folder != skill_id {
@@ -289,7 +318,7 @@ pub async fn fetch(core: &Core, source: &str, skill_id: &str) -> Result<MarketFe
             return Err(e);
         }
     };
-    let preview = match core.library_inspect(&dir) {
+    let preview = match core.skill_inspect(&dir) {
         Ok(p) => p,
         Err(e) => {
             cleanup();
@@ -300,10 +329,7 @@ pub async fn fetch(core: &Core, source: &str, skill_id: &str) -> Result<MarketFe
         .and_then(|f| std::fs::read(f).ok())
         .map(|b| String::from_utf8_lossy(&b[..b.len().min(256 * 1024)]).into_owned())
         .unwrap_or_default();
-    core.remember_origin(
-        dir,
-        LibrarySource::Marketplace { registry: REGISTRY.into(), source: source.into(), skill_id: skill_id.into(), path: path.clone(), revision: revision.clone() },
-    );
+    core.remember_origin(dir, MarketOrigin { source: source.into(), skill_id: skill_id.into(), path: path.clone(), revision: revision.clone() });
     Ok(MarketFetched { preview, skill_md, revision, path })
 }
 

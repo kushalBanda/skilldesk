@@ -211,23 +211,6 @@ fn opencode(env: &Env, out: &mut Vec<Item>) {
             }));
         }
     }
-    // Files SkillDesk turned off (moved out of `plugins/`).
-    for e in std::fs::read_dir(env.skilldesk_dir().join("disabled/plugins/opencode")).into_iter().flatten().flatten() {
-        let p = e.path();
-        if !p.is_file() || e.file_name().to_string_lossy().starts_with('.') {
-            continue;
-        }
-        out.push(item(Found {
-            agent: "opencode",
-            name: p.file_stem().unwrap_or_default().to_string_lossy().trim_end_matches("-opencode-plugin").to_string(),
-            market: "plugins/".into(),
-            version: None,
-            contents: PluginContents::default(),
-            manifest: p.clone(),
-            root: p,
-            on: Some(false),
-        }));
-    }
     // npm packages named in the config.
     if let Some(file) = cfg_file {
         for l in listed.iter().filter(|l| !l.starts_with('.') && !l.starts_with('/')) {

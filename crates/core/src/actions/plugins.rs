@@ -203,13 +203,8 @@ fn gemini_set(core: &Core, req: ActionRequest, it: &Item, on: bool) -> Result<Ac
     ))
 }
 
-/// Where SkillDesk keeps OpenCode plugin files that are off (OpenCode loads
-/// every code file in its `plugins/` folder, so off means moved out of it).
-pub(crate) fn opencode_off_dir(core: &Core) -> PathBuf {
-    core.env.skilldesk_dir().join("disabled/plugins/opencode")
-}
-
-/// OpenCode: a code file in `plugins/` moves out (off) and back (on); a
+/// OpenCode: a code file in `plugins/` has no off switch (OpenCode loads every
+/// code file there), so off moves it to the Trash (Undo brings it back); a
 /// folder plugin is switched by its entry in the config's `plugin` list.
 fn opencode_set(core: &Core, req: ActionRequest, it: &Item, f: &crate::model::PluginFacts, on: bool) -> Result<ActionPlan, AppError> {
     let summary = format!("Turned {} {} for OpenCode", if on { "on" } else { "off" }, it.name);
@@ -218,12 +213,14 @@ fn opencode_set(core: &Core, req: ActionRequest, it: &Item, f: &crate::model::Pl
         return Err(invalid("This OpenCode plugin is an npm package named in opencode.json. Remove it from that list in OpenCode."));
     };
     if root.is_file() {
-        let name = root.file_name().unwrap_or_default().to_owned();
-        let to = if on { cfg_dir.join("plugins").join(&name) } else { opencode_off_dir(core).join(&name) };
-        if std::fs::symlink_metadata(&to).is_ok() {
-            return Err(invalid(format!("{} already exists. Nothing was changed.", to.display())));
+        if on {
+            return Err(invalid("This OpenCode plugin file is already on."));
         }
-        return Ok(plan_for(req, "opencode", summary, vec![FileOp::MovePath { from: root, to }]));
+        let to = trash_target(core, &root);
+        let summary = format!("Moved {} to the Trash for OpenCode", it.name);
+        let mut p = plan_for(req, "opencode", summary, vec![FileOp::MovePath { from: root, to }]);
+        p.needs_confirm = true;
+        return Ok(p);
     }
     // Folder plugin: find the entry that points into it, in opencode.json(c) or tui.json.
     let files: Vec<PathBuf> = ["opencode.json", "opencode.jsonc", "tui.json"].iter().map(|n| cfg_dir.join(n)).filter(|p| p.is_file()).collect();

@@ -3,7 +3,7 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { useOverview, useScanOnLaunch, useScanning, useStartScan } from "./ipc/queries";
-import { Welcome } from "./screens/Welcome";
+import { Welcome, type WelcomePhase } from "./screens/Welcome";
 import { Skills } from "./screens/Skills";
 import { History } from "./screens/History";
 import { Hooks } from "./screens/Hooks";
@@ -14,7 +14,6 @@ import { useNavigateEvents } from "./ipc/useNavigateEvents";
 import { ActionProvider } from "./actions/ActionProvider";
 import { Dashboard } from "./screens/Dashboard";
 import { Placeholder } from "./screens/Placeholder";
-import { Adopt } from "./screens/Adopt";
 import { Marketplace } from "./screens/Marketplace";
 import { Subagents } from "./screens/Subagents";
 import { Memory } from "./screens/Memory";
@@ -23,13 +22,18 @@ import { Secrets } from "./screens/Secrets";
 import { Cleanup } from "./screens/Cleanup";
 import { Wrapped } from "./screens/Wrapped";
 import { Settings } from "./screens/Settings";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandPalette } from "./components/CommandPalette";
 import { ipc } from "./ipc/client";
 import { useLocation, useNavigate } from "react-router-dom";
-import { enterScreen } from "./lib/motion";
+import { enterScreen, shellEnter } from "./lib/motion";
 import { nav } from "./strings";
 import { useTrackBack } from "./components/BackLink";
+
+/** The discovery scene shows at least this long, so a fast scan does not flash (ms). */
+const SCENE_MIN_MS = 2200;
+/** "Found on this Mac" holds this long before the scene lifts away (ms). */
+const DONE_HOLD_MS = 900;
 
 export function App() {
   const overview = useOverview();
@@ -38,14 +42,41 @@ export function App() {
   useScanOnLaunch(overview.isSuccess ? overview.data.scanned_at !== null : undefined);
   const built = new Set(["/", "/fixes", "/skills", "/plugins", "/hooks", "/mcp", "/history", "/marketplace", "/subagents", "/memory", "/sessions", "/secrets", "/cleanup", "/wrapped", "/settings"]);
   const others = nav.flatMap((s) => s.items).filter((i) => !built.has(i.to));
-  if (overview.isSuccess && overview.data.scanned_at === null && !scanning) {
-    return <Welcome agents={overview.data.agents} known={overview.data.known_agents} onScan={startScan} />;
-  }
+  // First run (DESIGN.md §5): the shell stays mounted (inert) under Welcome,
+  // so nothing heavy mounts mid-motion.
+  const [flow, setFlow] = useState<WelcomePhase | "gone">("intro");
+  const startedAt = useRef(0);
+  const shell = useRef<HTMLDivElement>(null);
+  const welcome = overview.isSuccess && overview.data.scanned_at === null && !scanning;
+  const scan = () => {
+    startedAt.current = performance.now();
+    setFlow("scanning");
+    startScan();
+  };
+  const dataReady = flow === "scanning" && overview.isSuccess && (overview.data.activity.length > 0 || !scanning);
+  useEffect(() => {
+    if (!dataReady) return;
+    const wait = Math.max(0, SCENE_MIN_MS - (performance.now() - startedAt.current));
+    const id = window.setTimeout(() => setFlow("done"), wait);
+    return () => window.clearTimeout(id);
+  }, [dataReady]);
+  useEffect(() => {
+    if (flow === "done") {
+      const id = window.setTimeout(() => setFlow("leaving"), DONE_HOLD_MS);
+      return () => window.clearTimeout(id);
+    }
+    if (flow === "leaving") shellEnter(shell.current);
+  }, [flow]);
+  const gone = useCallback(() => setFlow("gone"), []);
+  const covered = flow === "intro" ? welcome : flow !== "gone";
+  const cover = covered && overview.data ? <Welcome data={overview.data} phase={flow as WelcomePhase} onScan={scan} onGone={gone} /> : null;
   return (
+    <>
+    {cover}
     <HashRouter>
       <ActionProvider>
       <NavigateEvents />
-      <div className="flex h-full">
+      <div ref={shell} className="flex h-full" inert={covered && flow !== "leaving"}>
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar />
@@ -55,13 +86,12 @@ export function App() {
                 path="/"
                 element={
                   <Padded>
-                    <Dashboard data={overview.data} error={overview.error} loading={overview.isPending} />
+                    <Dashboard data={overview.data} error={overview.error} loading={overview.isPending} reveal={flow === "leaving"} />
                   </Padded>
                 }
               />
               <Route path="/fixes" element={<Padded><Fixes /></Padded>} />
               <Route path="/skills" element={<Skills />} />
-              <Route path="/adopt" element={<Adopt />} />
               <Route path="/marketplace" element={<Marketplace />} />
               <Route path="/hooks" element={<Hooks />} />
               <Route path="/plugins" element={<Plugins />} />
@@ -83,6 +113,7 @@ export function App() {
       </div>
       </ActionProvider>
     </HashRouter>
+    </>
   );
 }
 

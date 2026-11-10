@@ -7,7 +7,7 @@ export type CliStatus = { state: CliState, path: string,
  */
 bundled: boolean, 
 /**
- * A shell start file already adds `~/.skilldesk/bin` to PATH.
+ * A shell start file already adds `~/.local/bin` to PATH.
  */
 on_path: boolean, 
 /**

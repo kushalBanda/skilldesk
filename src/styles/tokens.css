@@ -44,6 +44,24 @@
   --heat-5: #00468a;
 }
 
+/* Welcome scene (DESIGN.md §6 Welcome): a daylight sky over hills. The photo
+   is light in both themes, so the screen keeps light ink in dark mode too. */
+.welcome-scene {
+  color-scheme: light;
+  --bg: #ffffff;
+  --panel: #f7f7f7;
+  --sunk: #efefef;
+  --rule: #e3e3e3;
+  --ink: #000000;
+  --ink-2: #1f2a36;
+  --ink-3: #3d4955;
+  --welcome-glass: rgba(255, 255, 255, 0.82);
+  --welcome-glass-solid: rgba(255, 255, 255, 0.94);
+  --welcome-glass-edge: rgba(255, 255, 255, 0.6);
+  --welcome-drop: rgba(20, 48, 72, 0.4);
+  background: linear-gradient(180deg, #78cfff 0px, #8dd8ff 60px, #9adbfd 120px, #aadbf4 180px, #b7daec 240px, #c3dce4 360px, #cbdddf 480px);
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;

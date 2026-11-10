@@ -5,9 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { useAction } from "../actions/ActionProvider";
 import { useFixes, useItems, useOverview, useSessions, useStartScan } from "../ipc/queries";
 import type { ActionRequest } from "../ipc/bindings/ActionRequest";
-import type { Item } from "../ipc/bindings/Item";
 import type { ItemKind } from "../ipc/bindings/ItemKind";
 import { agentName } from "../lib/agents";
+import { itemRoute, withParams } from "../lib/routes";
 import { kindLabel, nav, t } from "../strings";
 
 type Group = "action" | "jump" | "item";
@@ -23,27 +23,6 @@ type Entry = {
 
 const SEARCHED: ItemKind[] = ["skill", "hook", "mcp_server", "plugin", "subagent", "command", "memory"];
 
-function route(item: Item): string {
-  const id = encodeURIComponent(item.id);
-  switch (item.kind) {
-    case "skill":
-      return `/skills?id=${id}`;
-    case "hook":
-      return `/hooks?id=${id}`;
-    case "mcp_server":
-      return `/mcp?id=${id}`;
-    case "plugin":
-      return `/plugins?id=${id}`;
-    case "subagent":
-      return `/subagents?id=${id}`;
-    case "command":
-      return `/subagents?tab=command&id=${id}`;
-    case "memory":
-      return `/memory?id=${id}`;
-    default:
-      return "/";
-  }
-}
 
 /** Every query word must appear; a name that starts with the query ranks first. */
 function score(e: Entry, q: string, words: string[]): number | null {
@@ -104,7 +83,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     for (const it of items) {
       const st = it.status.state;
       const who = it.agents.map((a) => agentName(agents, a)).join(", ");
-      if (it.facts.kind === "hook" && (it.facts.switch === "stash" || it.facts.switch === "native") && st !== "gone" && st !== "unreadable") {
+      if (it.facts.kind === "hook" && it.facts.switch === "native" && st !== "gone" && st !== "unreadable") {
         const on = st === "off";
         out.push({
           key: `hook:${it.id}`,
@@ -128,7 +107,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       }
       if (it.facts.kind === "mcp_server") {
         for (const l of it.facts.locations) {
-          if (l.switch !== "stash" && l.switch !== "native") continue;
+          if (l.switch !== "native") continue;
           const a = agentName(agents, l.agent);
           out.push({
             key: `mcp:${it.id}:${l.entry}`,
@@ -150,11 +129,11 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         group: "item",
         label: it.kind === "command" ? `/${it.name}` : it.name,
         sub: `${kindLabel[it.kind]} · ${it.agents.map((a) => agentName(agents, a)).join(", ")}`,
-        run: go(route(it)),
+        run: go(itemRoute(it)),
       });
     }
     for (const s of sessions.data ?? []) {
-      out.push({ key: `session:${s.id}`, group: "item", label: s.title, sub: `${kindLabel.session} · ${agentName(agents, s.origin)}`, run: go(`/sessions?id=${encodeURIComponent(s.id)}`) });
+      out.push({ key: `session:${s.id}`, group: "item", label: s.title, sub: `${kindLabel.session} · ${agentName(agents, s.origin)}`, run: go(withParams("/sessions", { id: s.id })) });
     }
     return out;
     // `loaded` stands for the item lists (new data, new stamp).

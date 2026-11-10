@@ -28,7 +28,7 @@ export function ScanButton() {
   return (
     <button
       type="button"
-      onClick={start}
+      onClick={() => start()}
       disabled={scanning}
       aria-label={label}
       title={label}

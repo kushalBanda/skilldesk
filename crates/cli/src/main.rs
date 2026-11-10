@@ -100,7 +100,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Link a skill into an agent's skills folder. Changes nothing without `--yes`.
+    /// Copy a skill into an agent's skills folder. Changes nothing without `--yes`.
     Link {
         skill: String,
         agent: String,
@@ -109,8 +109,8 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Remove a skill from an agent's skills folder (a folder goes to
-    /// `~/.skilldesk/disabled`, a link is removed). Changes nothing without `--yes`.
+    /// Remove a skill from an agent's skills folder (a folder goes to the
+    /// Trash, a link is removed). Changes nothing without `--yes`.
     Unlink {
         skill: String,
         agent: String,
@@ -119,8 +119,8 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Install a skill folder, `.zip` or `.skill` into the library and link it
-    /// for each `--agent`. Changes nothing without `--yes`.
+    /// Copy a skill folder, `.zip` or `.skill` into each `--agent`'s skills
+    /// folder. Changes nothing without `--yes`.
     Install {
         from: PathBuf,
         #[arg(long = "agent")]
@@ -261,7 +261,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
         Command::Install { from, agents, yes, json } => {
             let from = std::fs::canonicalize(&from).map_err(|e| format!("cannot read {}: {e}", from.display()))?;
             let agents = agents.iter().map(|a| agent_key(a)).collect::<Result<Vec<_>, _>>()?;
-            return plan_apply(&core, ActionRequest::LibraryInstall { from, agents }, yes, json);
+            return plan_apply(&core, ActionRequest::SkillInstall { from, agents }, yes, json);
         }
         Command::Scan { json } => {
             let run_id = scan::run_scan(&core, &scan::NoSink)?;

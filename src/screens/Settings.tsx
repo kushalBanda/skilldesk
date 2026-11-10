@@ -33,21 +33,7 @@ export function Settings() {
           <>
             <Agents agents={s.agents} onError={setError} />
             <Custom keys={s.custom.map((c) => c.key)} agents={s.agents} onError={setError} />
-            {/* Short sections sit side by side on a wide window, stacked on a narrow one. */}
-            <div className="grid grid-cols-1 gap-x-12 gap-y-10 min-[1280px]:grid-cols-2">
-            <section className="flex min-w-0 flex-col gap-2">
-              <h2 className={h2}>{t.libraryTitle}</h2>
-              <p className="m-0 text-[13px] text-ink-2">{t.libraryLead}</p>
-              <div className="flex items-center gap-4 border-t border-rule py-3">
-                <code className="selectable min-w-0 flex-1 truncate font-mono text-[13px]">{tildePath(s.library_dir)}</code>
-                <span className="tnum text-[13px] text-ink-2">{t.libraryN(s.library_skills)}</span>
-                <button type="button" className={btn} onClick={() => ipc.revealInFinder(s.library_dir).catch((e) => setError(getErrorMessage(e, t.loadFailed)))}>
-                  {t.showInFinder}
-                </button>
-              </div>
-            </section>
             <Cli onError={setError} />
-            </div>
           </>
         ) : null}
       </div>

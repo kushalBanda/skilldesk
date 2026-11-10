@@ -2,7 +2,6 @@
 //! write, roll back on failure) → History → Undo.
 
 mod hooks;
-mod library;
 mod mcp;
 pub mod memory;
 mod plugins;
@@ -10,7 +9,7 @@ mod secrets;
 mod storage;
 mod ops;
 mod plan;
-pub mod stash;
+mod skills;
 
 use crate::core::Core;
 use crate::error::{AppError, ErrorKind};
@@ -30,8 +29,9 @@ pub(crate) use plugins::trash_target;
 #[ts(export)]
 pub enum ActionRequest {
     SkillToggle { id: ItemId, agent: AgentKey, on: bool },
+    /// Only where the agent has its own switch (Codex); elsewhere, remove.
     HookSetEnabled { ids: Vec<ItemId>, on: bool },
-    /// Take hooks out of their file for good (off hooks leave the stash).
+    /// Take hooks out of their file (Undo puts them back).
     HookRemove { ids: Vec<ItemId> },
     /// Remove every link that points nowhere in these skills.
     LinksRemoveDangling { ids: Vec<ItemId> },
@@ -49,22 +49,13 @@ pub enum ActionRequest {
     /// Switch one config entry (`McpLocation.entry`) of a server.
     McpSetEnabled { id: ItemId, entry: String, on: bool },
     McpCopyToAgent { id: ItemId, agent: AgentKey },
-    /// Install a folder, `.zip` or `.skill` into the library and link it for these agents.
-    LibraryInstall {
+    /// Take one config entry (`McpLocation.entry`) of a server out of its file.
+    McpRemove { id: ItemId, entry: String },
+    /// Copy a folder, `.zip` or `.skill` into each of these agents' skills folders.
+    SkillInstall {
         #[ts(type = "string")]
         from: PathBuf,
         agents: Vec<AgentKey>,
-    },
-    /// Move a skill's own folder into the library and link it back.
-    SkillAddToLibrary { id: ItemId },
-    /// Unlink a library skill everywhere, then move its folder to the Trash.
-    LibraryRemove { id: ItemId },
-    /// Keep one copy as the library copy; every other copy goes to the Trash
-    /// and every place links to the library.
-    LibraryAdopt {
-        id: ItemId,
-        #[ts(type = "string")]
-        keep: PathBuf,
     },
     /// Replace a memory file's whole text.
     MemoryEdit { id: ItemId, text: String },
@@ -98,10 +89,8 @@ impl ActionRequest {
             ActionRequest::McpSetEnabled { on: true, .. } => "mcp.enable",
             ActionRequest::McpSetEnabled { on: false, .. } => "mcp.disable",
             ActionRequest::McpCopyToAgent { .. } => "mcp.copy",
-            ActionRequest::LibraryInstall { .. } => "library.install",
-            ActionRequest::SkillAddToLibrary { .. } => "library.add",
-            ActionRequest::LibraryRemove { .. } => "library.remove",
-            ActionRequest::LibraryAdopt { .. } => "library.adopt",
+            ActionRequest::McpRemove { .. } => "mcp.remove",
+            ActionRequest::SkillInstall { .. } => "skill.install",
             ActionRequest::MemoryEdit { .. } => "memory.edit",
             ActionRequest::MemoryForget { .. } => "memory.forget",
             ActionRequest::MemoryPromote { .. } => "memory.promote",
@@ -386,7 +375,7 @@ impl Core {
     /// own scratch folder; agent files are never touched by a plan).
     pub fn action_discard(&self, plan_id: &str) {
         self.plans.lock().unwrap_or_else(|p| p.into_inner()).remove(plan_id);
-        let staging = self.env.skilldesk_dir().join("staging");
+        let staging = self.env.staging_dir();
         if plan_id.starts_with("act-") && !plan_id.contains(['/', '.']) {
             let _ = std::fs::remove_dir_all(staging.join(plan_id));
             let _ = std::fs::remove_dir(&staging); // only when empty
@@ -407,6 +396,15 @@ impl Core {
         self.mute(plan.ops.iter().flat_map(FileOp::paths));
         run_ops(&self.env, &plan.ops)?;
         self.after_masking(&plan.ops)?;
+        if let ActionRequest::SkillInstall { from, .. } = &plan.request {
+            let name = plan.ops.iter().find_map(|o| match o {
+                FileOp::MovePath { to, .. } if !to.starts_with(self.env.home.join(".Trash")) => to.file_name().map(|n| n.to_string_lossy().into_owned()),
+                _ => None,
+            });
+            if let Some(name) = name {
+                crate::net::market::record_install(self, from, &name);
+            }
+        }
         self.after_cleanup(plan.request.kind());
         let record = ActionRecord {
             id: plan.id.clone(),

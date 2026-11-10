@@ -4,7 +4,6 @@ use super::{new_id, ActionPlan, ActionRequest, FileOp};
 use crate::adapters;
 use crate::core::Core;
 use crate::error::{AppError, ErrorKind};
-use crate::fsx::path_guard::sanitize_name;
 use crate::model::{AgentKey, Item, ItemId, KindFacts, LinkState, SkillFacts};
 use std::path::{Path, PathBuf};
 
@@ -14,7 +13,7 @@ fn invalid(msg: impl Into<String>) -> AppError {
 
 pub fn build(core: &Core, req: ActionRequest) -> Result<ActionPlan, AppError> {
     match &req {
-        ActionRequest::SkillToggle { id, agent, on } => skill_toggle(core, req.clone(), id, agent, *on),
+        ActionRequest::SkillToggle { id, agent, on } => super::skills::toggle(core, req.clone(), id, agent, *on),
         ActionRequest::HookSetEnabled { ids, on } => super::hooks::build(core, req.clone(), ids, *on),
         ActionRequest::HookRemove { ids } => super::hooks::remove(core, req.clone(), ids),
         ActionRequest::LinksRemoveDangling { ids } => remove_dangling(core, req.clone(), ids, None),
@@ -25,10 +24,8 @@ pub fn build(core: &Core, req: ActionRequest) -> Result<ActionPlan, AppError> {
         ActionRequest::CacheClean { ids } => super::plugins::clean_cache(core, req.clone(), ids),
         ActionRequest::McpSetEnabled { id, entry, on } => super::mcp::set_enabled(core, req.clone(), id, entry, *on),
         ActionRequest::McpCopyToAgent { id, agent } => super::mcp::copy_to_agent(core, req.clone(), id, agent),
-        ActionRequest::LibraryInstall { from, agents } => super::library::install(core, req.clone(), from, agents),
-        ActionRequest::SkillAddToLibrary { id } => super::library::add(core, req.clone(), id),
-        ActionRequest::LibraryRemove { id } => super::library::remove(core, req.clone(), id),
-        ActionRequest::LibraryAdopt { id, keep } => super::library::adopt(core, req.clone(), id, keep),
+        ActionRequest::McpRemove { id, entry } => super::mcp::remove(core, req.clone(), id, entry),
+        ActionRequest::SkillInstall { from, agents } => super::skills::install(core, req.clone(), from, agents),
         ActionRequest::MemoryEdit { id, text } => super::memory::edit(core, req.clone(), id, text),
         ActionRequest::MemoryForget { ids } => super::memory::forget(core, req.clone(), ids),
         ActionRequest::MemoryPromote { ids, agents, text } => super::memory::promote(core, req.clone(), ids, agents, text),
@@ -104,69 +101,4 @@ pub(crate) fn agents_reading(core: &Core, dir: &Path) -> Vec<AgentKey> {
 
 pub(crate) fn display(key: &AgentKey) -> String {
     adapters::find(&key.0).map(|a| a.display_name.to_string()).unwrap_or_else(|| key.0.clone())
-}
-
-fn skill_toggle(core: &Core, req: ActionRequest, id: &ItemId, agent: &AgentKey, on: bool) -> Result<ActionPlan, AppError> {
-    let (item, facts) = skill(core, id)?;
-    let adapter = adapters::find(&agent.0)
-        .filter(|a| a.is_installed(&core.env))
-        .ok_or_else(|| invalid("That agent is not installed on this Mac."))?;
-    let live = |l: &&crate::model::SkillLocation| !matches!(l.link, LinkState::Dangling(_));
-    let names = |keys: &[AgentKey]| keys.iter().map(display).collect::<Vec<_>>().join(", ");
-
-    if on {
-        if facts.locations.iter().filter(live).any(|l| l.agents.contains(agent)) {
-            return Err(invalid(format!("{} is already on for {}.", item.name, adapter.display_name)));
-        }
-        // Only library skills are linked into other agents (ADR 0015); a skill
-        // outside the library toggles only where it is.
-        let source: PathBuf = facts
-            .library
-            .clone()
-            .ok_or_else(|| invalid(format!("Add {} to the library first, then turn it on for {}.", item.name, adapter.display_name)))?;
-        let dir_name = sanitize_name(&source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| item.name.clone()));
-        let agent_dir = core.env.resolve(adapter.skills_dir);
-        let link = agent_dir.join(dir_name);
-        let mut agents = agents_reading(core, &agent_dir);
-        if !agents.contains(agent) {
-            agents.insert(0, agent.clone());
-        }
-        let needs_confirm = agents.len() > 1;
-        let summary = format!("{} on for {}", item.name, names(&agents));
-        return Ok(ActionPlan { id: new_id(), request: req, summary, agents, ops: vec![FileOp::CreateSymlink { link, to: source }], needs_confirm, removed: vec![], untouched: vec![] });
-    }
-
-    let here: Vec<_> = facts.locations.iter().filter(live).filter(|l| l.agents.contains(agent)).collect();
-    if here.is_empty() {
-        return Err(invalid(format!("{} is already off for {}.", item.name, adapter.display_name)));
-    }
-    if here.iter().all(|l| l.plugin.is_some()) {
-        return Err(invalid(format!("{} comes from a plugin. Turn the plugin off instead.", item.name)));
-    }
-    if here.iter().all(|l| l.project.is_some()) {
-        return Err(invalid(format!("{} lives in a project folder; SkillDesk only switches global skills.", item.name)));
-    }
-    let mut ops = Vec::new();
-    let mut agents: Vec<AgentKey> = Vec::new();
-    let mut moves_folder = false;
-    for l in here.into_iter().filter(|l| l.plugin.is_none() && l.project.is_none()) {
-        match &l.link {
-            LinkState::Link(target) => ops.push(FileOp::RemoveSymlink { link: l.path.clone(), to: target.clone() }),
-            LinkState::RealDir => {
-                moves_folder = true;
-                let name = l.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let to = core.env.skilldesk_dir().join("disabled/skills").join(&agent.0).join(sanitize_name(&name));
-                ops.push(FileOp::MovePath { from: l.path.clone(), to });
-            }
-            LinkState::Dangling(_) => {}
-        }
-        for a in &l.agents {
-            if !agents.contains(a) {
-                agents.push(a.clone());
-            }
-        }
-    }
-    let needs_confirm = moves_folder || agents.len() > 1;
-    let summary = format!("{} off for {}", item.name, names(&agents));
-    Ok(ActionPlan { id: new_id(), request: req, summary, agents, ops, needs_confirm, removed: vec![], untouched: vec![] })
 }

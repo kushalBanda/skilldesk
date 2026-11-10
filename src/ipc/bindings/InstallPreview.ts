@@ -2,8 +2,4 @@
 import type { InstallTarget } from "./InstallTarget";
 import type { SourceKind } from "./SourceKind";
 
-export type InstallPreview = { source: string, kind: SourceKind, name: string, description: string | null, files: number, bytes: number, 
-/**
- * A library skill of the same name is there already (it would be replaced).
- */
-in_library: boolean, targets: Array<InstallTarget>, };
+export type InstallPreview = { source: string, kind: SourceKind, name: string, description: string | null, files: number, bytes: number, targets: Array<InstallTarget>, };

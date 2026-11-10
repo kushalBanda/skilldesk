@@ -7,6 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 // global rule. Every change goes through the action flow (plan → Undo).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { PathLink } from "../components/PlaceLink";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -507,7 +508,13 @@ function MemorySheet({ item, onClose, onPromote }: { item: Item; onClose: () => 
       <p className="mt-2 flex items-center gap-2 text-[13px] text-ink-3">
         <TypeChip item={item} />
         <AgentStack agents={item.agents} name={(k) => agentName(agentList, k)} size={20} card={false} />
-        <span className="truncate">{isFile ? tildePath(path) : m.project ? tildePath(m.project) : m.project_label}</span>
+        {isFile || m.project ? (
+          <span className="flex min-w-0">
+            <PathLink path={isFile ? path : m.project!}>{tildePath(isFile ? path : m.project!)}</PathLink>
+          </span>
+        ) : (
+          <span className="truncate">{m.project_label}</span>
+        )}
         {m.modified ? <span>· {formatDate(m.modified)}</span> : null}
       </p>
       {m.description ? <p className="mt-2 text-ink-2">{m.description}</p> : null}

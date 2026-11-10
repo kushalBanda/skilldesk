@@ -15,6 +15,8 @@ import type { Item } from "../ipc/bindings/Item";
 import type { DefFacts } from "../ipc/bindings/DefFacts";
 import type { AgentSummary } from "../ipc/bindings/AgentSummary";
 import { FChip } from "../components/FChip";
+import { AgentFilter } from "../components/AgentFilter";
+import { PathLink, PlaceLink, usePluginRoute, useSkillRoute } from "../components/PlaceLink";
 import { DetailSheet, SheetSteps } from "../components/DetailSheet";
 import { agentName } from "../lib/agents";
 import { formatCount, formatDate, stripFrontmatter, tildePath } from "../lib/format";
@@ -30,9 +32,13 @@ export function Subagents() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = params.get("tab") === "command" ? "command" : "subagent";
   const [filter, setFilter] = useState<Filter>("all");
+  const [agent, setAgent] = useState<string | null>(params.get("agent"));
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(params.get("id"));
-  useEffect(() => setSelectedId(params.get("id")), [params]);
+  useEffect(() => {
+    setSelectedId(params.get("id"));
+    setAgent(params.get("agent"));
+  }, [params]);
   useEffect(() => setFilter("all"), [tab]);
   const subagents = useItems("subagent");
   const commands = useItems("command");
@@ -59,9 +65,10 @@ export function Subagents() {
         .filter((i) =>
           filter === "all" ? true : filter === "unused" ? i.status.state === "unused" : filter === "skill" ? facts(i)?.skill : facts(i)?.origin === filter,
         )
+        .filter((i) => !agent || i.agents.includes(agent))
         .filter((i) => !query || i.name.toLowerCase().includes(query.trim().toLowerCase()))
         .sort((a, b) => runs(b) - runs(a) || a.name.localeCompare(b.name)),
-    [known, filter, query],
+    [known, filter, agent, query],
   );
   const rows = sortBy(ordered, sort, (i, k) =>
     k === "name" ? i.name : k === "agents" ? i.agents.length : k === "runs" ? (i.usage ? runs(i) : null) : (i.usage?.last_used ?? null),
@@ -70,7 +77,7 @@ export function Subagents() {
     n[k] || k === "all" ? <FChip label={label} count={n[k]} active={filter === k} onClick={() => setFilter(filter === k && k !== "all" ? "all" : k)} /> : null;
   const setTab = (next: Tab) => {
     setSelectedId(null);
-    setParams(next === "command" ? { tab: "command" } : {});
+    setParams({ ...(next === "command" ? { tab: "command" } : {}), ...(agent ? { agent } : {}) });
   };
   const prefix = tab === "command" ? "/" : "";
 
@@ -146,6 +153,7 @@ export function Subagents() {
           {chip("unused", t.neverRun)}
           {chip("built_in", t.builtIn)}
           {chip("skill", t.fromSkill)}
+          <AgentFilter agents={agents} items={known} value={agent} onChange={setAgent} />
         </div>
         {q.isPending ? null : (
           <table className="w-full table-fixed border-collapse text-left text-[14px]">
@@ -256,6 +264,8 @@ function Row({
 function DefSheet({ item, prefix, agents, onClose }: { item: Item; prefix: string; agents: AgentSummary[]; onClose: () => void }) {
   const f = facts(item)!;
   const navigate = useNavigate();
+  const pluginRoute = usePluginRoute();
+  const skillTo = useSkillRoute()(item.name, item.agents);
   const doc = useQuery({
     queryKey: ["doc", item.id],
     queryFn: () => ipc.itemDocument(item.id),
@@ -270,22 +280,24 @@ function DefSheet({ item, prefix, agents, onClose }: { item: Item; prefix: strin
         <Badges item={item} />
       </h2>
       {f.description ? <p className="mt-2 text-ink-2">{f.description}</p> : null}
-      <p className="mt-2 text-[13px] text-ink-3">
-        {item.usage ? `${formatCount(runs(item))} ${t.runs.toLowerCase()}` : t.runsNote}
-        {item.usage?.last_used ? ` · ${t.lastRun.toLowerCase()} ${formatDate(item.usage.last_used)}` : ""}
-        {f.model ? ` · ${t.modelLabel} ${f.model}` : ""}
-      </p>
+      {f.model ? (
+        <p className="mt-2 text-[13px] text-ink-3">
+          {t.modelLabel} {f.model}
+        </p>
+      ) : null}
       {f.origin === "built_in" ? <p className="mt-4 text-[13px] text-ink-3">{t.builtInNote}</p> : null}
       {f.skill ? (
         <div className="mt-4">
           <p className="m-0 text-[13px] text-ink-3">{t.skillNote}</p>
-          <button
-            type="button"
-            onClick={() => navigate("/skills")}
-            className="mt-2 h-8 rounded-full bg-bg px-3 text-[13px] font-semibold ring-1 ring-rule hover:bg-sunk active:scale-[0.97]"
-          >
-            {t.openSkill}
-          </button>
+          {skillTo ? (
+            <button
+              type="button"
+              onClick={() => navigate(skillTo)}
+              className="mt-2 h-8 rounded-full bg-bg px-3 text-[13px] font-semibold ring-1 ring-rule hover:bg-sunk active:scale-[0.97]"
+            >
+              {t.openSkill}
+            </button>
+          ) : null}
         </div>
       ) : null}
       {f.locations.length ? (
@@ -299,21 +311,25 @@ function DefSheet({ item, prefix, agents, onClose }: { item: Item; prefix: strin
                 <div className="flex items-center gap-2">
                   <span className="font-semibold">{agentName(agents, l.agent)}</span>
                   <span className="truncate text-[12.5px] text-ink-3">
-                    {l.project ? tildePath(l.project) : t.scopeUser}
-                    {l.plugin ? ` · ${t.plugin} ${l.plugin.id}` : ""}
+                    {l.project ? <PathLink path={l.project}>{tildePath(l.project)}</PathLink> : t.scopeUser}
+                    {l.plugin ? (
+                      <>
+                        {` · ${t.plugin} `}
+                        {pluginRoute(l.plugin.id) ? (
+                          <PlaceLink onClick={() => navigate(pluginRoute(l.plugin!.id)!)} title={t.openPlugin}>
+                            {l.plugin.id}
+                          </PlaceLink>
+                        ) : (
+                          l.plugin.id
+                        )}
+                      </>
+                    ) : null}
                     {l.name !== item.name ? ` · ${prefix}${l.name}` : ""}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => void ipc.revealInFinder(l.path)}
-                    className="ml-auto shrink-0 text-[12.5px] font-semibold text-ink-2 hover:text-ink"
-                  >
-                    {t.showInFinder}
-                  </button>
                 </div>
-                <div className="selectable mt-1 truncate font-mono text-[11.5px] text-ink-3" title={l.path}>
+                <PathLink path={l.path} className="mt-1 block font-mono text-[11.5px] text-ink-3">
                   {tildePath(l.path)}
-                </div>
+                </PathLink>
               </li>
             ))}
           </ul>

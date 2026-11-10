@@ -12,10 +12,12 @@ import type { Item } from "../ipc/bindings/Item";
 import type { McpFacts } from "../ipc/bindings/McpFacts";
 import type { AgentSummary } from "../ipc/bindings/AgentSummary";
 import { FChip } from "../components/FChip";
+import { AgentFilter } from "../components/AgentFilter";
 import { Switch } from "../components/Switch";
 import { DetailSheet, SheetSteps } from "../components/DetailSheet";
 import { dotColumns } from "../lib/agents";
 import { formatCount, formatDate, tildePath } from "../lib/format";
+import { PathLink, PluginName } from "../components/PlaceLink";
 import { t } from "../strings";
 
 type StatusFilter = "all" | "unused" | "off" | "keys";
@@ -24,10 +26,12 @@ const facts = (i: Item): McpFacts | null => (i.facts.kind === "mcp_server" ? i.f
 export function Mcp() {
   const [params] = useSearchParams();
   const [status, setStatus] = useState<StatusFilter>((params.get("status") as StatusFilter) ?? "all");
+  const [agent, setAgent] = useState<string | null>(params.get("agent"));
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(params.get("id"));
   useEffect(() => {
     setStatus((params.get("status") as StatusFilter) ?? "all");
+    setAgent(params.get("agent"));
     setSelectedId(params.get("id"));
   }, [params]);
   const { data, error, isPending } = useItems("mcp_server");
@@ -49,9 +53,10 @@ export function Mcp() {
     () =>
       configured
         .filter((s) => (status === "all" ? true : status === "keys" ? facts(s)?.holds_keys : s.status.state === status))
+        .filter((s) => !agent || s.agents.includes(agent))
         .filter((s) => !query || s.name.toLowerCase().includes(query.trim().toLowerCase()))
         .sort((a, b) => Number(b.usage?.count ?? 0) - Number(a.usage?.count ?? 0) || a.name.localeCompare(b.name)),
-    [configured, status, query],
+    [configured, status, agent, query],
   );
   const rows = sortBy(ordered, sort, (s, k) =>
     k === "name"
@@ -120,6 +125,7 @@ export function Mcp() {
           {chip("unused", t.neverCalled)}
           {chip("off", t.off)}
           {chip("keys", t.withKeys)}
+          <AgentFilter agents={agents} items={configured} value={agent} onChange={setAgent} />
         </div>
         {isPending ? null : (
           <table className="w-full table-fixed border-collapse text-left text-[14px]">
@@ -214,8 +220,8 @@ function Row({ item, columns, active, compact, onOpen }: { item: Item; columns: 
 function McpSwitch({ item, name }: { item: Item; name: (k: string) => string }) {
   const f = facts(item)!;
   const { run } = useAction();
-  const switchable = f.locations.filter((l) => l.switch === "stash" || l.switch === "native");
-  const fixed = f.locations.filter((l) => !(l.switch === "stash" || l.switch === "native"));
+  const switchable = f.locations.filter((l) => l.switch === "native");
+  const fixed = f.locations.filter((l) => l.switch !== "native");
   const on = switchable.some((l) => l.enabled);
   // The new state shows at once; the scan after the write confirms it.
   const [want, setWant] = useState<boolean | null>(null);
@@ -266,24 +272,30 @@ function McpSheet({ item, agents, onClose }: { item: Item; agents: AgentSummary[
         {item.name}
         <Badges item={item} />
       </h2>
-      <p className="mt-2 text-ink-2">
-        {formatCount(Number(item.usage?.count ?? 0))} {t.claudeCallsLower}
-        {item.usage?.last_used ? ` · ${t.lastCalled.toLowerCase()} ${formatDate(item.usage.last_used)}` : ""}
-      </p>
       <h3 className="mb-2 mt-6 text-[12.5px] font-semibold text-ink-3">
         {t.configuredIn} · {f.locations.length}
       </h3>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {f.locations.map((l) => {
-          const switchable = l.switch === "stash" || l.switch === "native";
+          const switchable = l.switch === "native";
           return (
             <li key={l.entry} className="rounded-row bg-panel px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="font-semibold">{name(l.agent)}</span>
                 <span className="text-[12.5px] text-ink-3">
                   {l.transport}
-                  {l.project ? ` · ${tildePath(l.project)}` : ""}
-                  {l.plugin ? ` · ${t.plugin} ${l.plugin}` : ""}
+                  {l.project ? (
+                    <>
+                      {" · "}
+                      <PathLink path={l.project}>{tildePath(l.project)}</PathLink>
+                    </>
+                  ) : null}
+                  {l.plugin ? (
+                    <>
+                      {` · ${t.plugin} `}
+                      <PluginName id={l.plugin} />
+                    </>
+                  ) : null}
                 </span>
                 <span className="ml-auto">
                   {switchable ? (
@@ -303,6 +315,15 @@ function McpSheet({ item, agents, onClose }: { item: Item; agents: AgentSummary[
                       ].join(" ")}
                     >
                       {l.enabled ? t.turnOff : t.turnOn}
+                    </button>
+                  ) : l.switch === "remove" ? (
+                    <button
+                      type="button"
+                      title={t.mcpRemoveNote}
+                      onClick={() => void run({ type: "mcp_remove", id: item.id, entry: l.entry }, f.locations.length === 1 ? onClose : undefined)}
+                      className="h-7 rounded-full px-3 text-[12.5px] font-semibold text-danger ring-1 ring-rule hover:bg-danger-soft active:scale-[0.97]"
+                    >
+                      {t.remove}
                     </button>
                   ) : (
                     <span className="text-[12px] text-ink-3">{l.enabled ? t.on : t.off}</span>

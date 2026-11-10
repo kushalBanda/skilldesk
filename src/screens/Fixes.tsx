@@ -15,7 +15,6 @@ const CATEGORY: Record<string, { label: string; tone: string }> = {
   broken_hooks: { label: "Urgent", tone: "bg-danger-soft text-danger" },
   slow_hook: { label: "Slow", tone: "bg-sunk text-warn-text" },
   dangling_links: { label: "Out of sync", tone: "bg-sunk text-warn-text" },
-  duplicate_skills: { label: "Out of sync", tone: "bg-sunk text-warn-text" },
   never_run_skills: { label: "Unused", tone: "bg-sunk text-ink-3" },
   ghost_plugins: { label: "Gone", tone: "bg-sunk text-warn-text" },
   unused_marketplaces: { label: "Unused", tone: "bg-sunk text-ink-3" },

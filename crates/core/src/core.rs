@@ -33,7 +33,7 @@ pub struct Core {
     pub(crate) muted: Mutex<Vec<(std::path::PathBuf, Instant)>>,
     pub(crate) transcripts: Mutex<Option<Arc<crate::parse::claude_runs::TranscriptStats>>>,
     /// Marketplace downloads waiting for Install, and where each came from.
-    pub(crate) origins: Mutex<HashMap<std::path::PathBuf, crate::library::LibrarySource>>,
+    pub(crate) origins: Mutex<HashMap<std::path::PathBuf, crate::net::market::MarketOrigin>>,
     /// A cleanup ran: the next config rescan measures disk use again.
     pub(crate) storage_dirty: std::sync::atomic::AtomicBool,
 }
@@ -74,14 +74,14 @@ impl Core {
         Ok(WriteGuard { _file: file, _lock: lock })
     }
 
-    pub(crate) fn remember_origin(&self, dir: std::path::PathBuf, source: crate::library::LibrarySource) {
+    pub(crate) fn remember_origin(&self, dir: std::path::PathBuf, source: crate::net::market::MarketOrigin) {
         let mut m = self.origins.lock().unwrap_or_else(|p| p.into_inner());
         m.retain(|d, _| d.exists());
         m.insert(dir, source);
     }
 
     /// The marketplace source of a download folder (set by `net::market::fetch`).
-    pub(crate) fn origin_of(&self, dir: &std::path::Path) -> Option<crate::library::LibrarySource> {
+    pub(crate) fn origin_of(&self, dir: &std::path::Path) -> Option<crate::net::market::MarketOrigin> {
         self.origins.lock().unwrap_or_else(|p| p.into_inner()).get(dir).cloned()
     }
 
@@ -187,7 +187,7 @@ impl Core {
             .item(id)?
             .ok_or_else(|| AppError::new(ErrorKind::NotFound, "This item is no longer in the inventory."))?;
         let path = match &item.facts {
-            KindFacts::Skill(f) if !f.locations.is_empty() || f.library.is_some() => item.sources.first().map(|s| s.path.clone()),
+            KindFacts::Skill(f) if !f.locations.is_empty() => item.sources.first().map(|s| s.path.clone()),
             KindFacts::Subagent(_) | KindFacts::Command(_) | KindFacts::Memory(_) => item.sources.first().map(|s| s.path.clone()),
             _ => None,
         }
@@ -199,28 +199,23 @@ impl Core {
     }
 
     /// What installing `path` would do (reads only).
-    pub fn library_inspect(&self, path: &std::path::Path) -> Result<crate::library::install::InstallPreview, AppError> {
-        crate::library::install::inspect(self, path)
+    pub fn skill_inspect(&self, path: &std::path::Path) -> Result<crate::install::InstallPreview, AppError> {
+        crate::install::inspect(self, path)
     }
 
-    /// For a library skill: every agent folder it can be linked into, and what is there now.
-    pub fn skill_targets(&self, id: &ItemId) -> Result<Vec<crate::library::install::InstallTarget>, AppError> {
+    /// Every agent skills folder this skill can be copied into, and what is there now.
+    pub fn skill_targets(&self, id: &ItemId) -> Result<Vec<crate::install::InstallTarget>, AppError> {
         let item = self
             .store
             .item(id)?
             .ok_or_else(|| AppError::new(ErrorKind::NotFound, "This item is no longer in the inventory."))?;
         let KindFacts::Skill(f) = &item.facts else { return Ok(vec![]) };
-        let Some(lib) = &f.library else { return Ok(vec![]) };
-        let name = lib.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        Ok(crate::library::install::targets(self, &name, lib))
-    }
-
-    pub fn adopt_view(&self, id: &ItemId) -> Result<crate::library::adopt::AdoptView, AppError> {
-        crate::library::adopt::view(self, id)
-    }
-
-    pub fn skill_diff(&self, id: &ItemId, a: &std::path::Path, b: &std::path::Path) -> Result<crate::library::adopt::SkillDiff, AppError> {
-        crate::library::adopt::diff(self, id, a, b)
+        let own = f.locations.iter().any(|l| l.plugin.is_none() && !matches!(l.link, crate::model::LinkState::Dangling(_)));
+        if !own || !f.home.is_dir() {
+            return Ok(vec![]);
+        }
+        let name = f.home.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        Ok(crate::install::targets(self, &name, Some(&f.home)))
     }
 
     pub fn items(&self, kind: ItemKind) -> Result<Vec<Item>, AppError> {

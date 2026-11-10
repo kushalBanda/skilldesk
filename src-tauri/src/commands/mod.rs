@@ -2,7 +2,7 @@ pub mod a11y;
 pub mod actions;
 pub mod fixes;
 pub mod items;
-pub mod library;
+pub mod skills;
 pub mod market;
 pub mod overview;
 pub mod scan;

@@ -7,7 +7,7 @@ import { formatBytes, formatCount, tildePath } from "../lib/format";
 import { t } from "../strings";
 
 const isTrash = (p: string) => /\/\.Trash\//.test(p);
-const isStaging = (p: string) => /\/\.skilldesk\/staging\//.test(p);
+const isStaging = (p: string) => /\/SkillDesk\/staging\//.test(p);
 
 function describe(op: FileOp): string {
   switch (op.op) {

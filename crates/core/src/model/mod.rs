@@ -148,10 +148,6 @@ pub struct SkillFacts {
     #[ts(type = "string")]
     pub home: PathBuf,
     pub locations: Vec<SkillLocation>,
-    /// `~/.skilldesk/skills/<name>` (resolved) when the skill is in the library.
-    #[serde(default)]
-    #[ts(type = "string | null")]
-    pub library: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -407,8 +403,8 @@ pub struct CacheFacts {
 pub enum SwitchKind {
     /// The agent has its own switch (Codex `hooks.state`).
     Native,
-    /// Remove the entry and keep it in `~/.skilldesk/disabled.json`.
-    Stash,
+    /// The agent has no off switch: the entry can only be removed from its file.
+    Remove,
     /// Only the owning Claude plugin can be turned off.
     Plugin,
     /// Not switchable here (OpenCode plugin files).
@@ -688,12 +684,9 @@ pub struct SettingsData {
     /// Found first, then by name.
     pub agents: Vec<AgentSetting>,
     pub custom: Vec<CustomAgent>,
-    #[ts(type = "string")]
-    pub library_dir: std::path::PathBuf,
-    pub library_skills: u32,
 }
 
-/// The `skilldesk` command in `~/.skilldesk/bin`.
+/// The `skilldesk` command in `~/.local/bin`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
@@ -714,7 +707,7 @@ pub struct CliStatus {
     pub path: std::path::PathBuf,
     /// This app carries the command (false in a build without it).
     pub bundled: bool,
-    /// A shell start file already adds `~/.skilldesk/bin` to PATH.
+    /// A shell start file already adds `~/.local/bin` to PATH.
     pub on_path: bool,
     /// The line to add to `~/.zshrc`.
     pub path_line: String,

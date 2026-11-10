@@ -1,7 +1,7 @@
 import { PageHeader } from "../components/PageHeader";
 import { SearchField } from "../components/SearchField";
 // Marketplace (DESIGN.md §7.21, ADR 0016): skills.sh lists and search, install
-// through the library path. The only screen that uses the network; requests
+// straight into each picked agent's skills folder. The only screen that uses the network; requests
 // start when it opens and stop when it closes.
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -454,8 +454,9 @@ function MarketSheet({ pick, offline, onClose }: { pick: Pick; offline: boolean;
   const p = f?.preview;
   const [chosen, setChosen] = useState<string[] | null>(null);
   const [showMd, setShowMd] = useState(false);
-  const linked = p ? p.targets.filter((x) => x.existing.kind === "linked").map((x) => x.key) : [];
-  const picked = chosen ?? (p ? (p.in_library && linked.length ? linked : p.targets.filter((x) => DEFAULT_ON.includes(x.key)).map((x) => x.key)) : []);
+  // Agents that already have a folder of this name: an install there is an update.
+  const present = p ? p.targets.filter((x) => x.existing.kind === "folder" || x.existing.kind === "linked").map((x) => x.key) : [];
+  const picked = chosen ?? (p ? (present.length ? present : p.targets.filter((x) => DEFAULT_ON.includes(x.key)).map((x) => x.key)) : []);
   const netDown = offline || getErrorKind(fetched.error) === "network";
   const host = pick.source.includes("/") ? "GitHub" : pick.source;
 
@@ -508,7 +509,7 @@ function MarketSheet({ pick, offline, onClose }: { pick: Pick; offline: boolean;
               {f.skill_md}
             </pre>
           ) : null}
-          <ClashNotes name={p.name} inLibrary={p.in_library} targets={p.targets} picked={picked} agents={agents} />
+          <ClashNotes name={p.name} targets={p.targets} picked={picked} agents={agents} />
           <AgentChips targets={p.targets} picked={picked} onChange={setChosen} agents={agents} />
           <h3 className="mb-1 mt-6 text-[12.5px] font-semibold text-ink-3">{t.whatInstallDoes}</h3>
           <ol className="m-0 flex flex-col gap-1 pl-5 text-[13px] text-ink-2">
@@ -521,17 +522,17 @@ function MarketSheet({ pick, offline, onClose }: { pick: Pick; offline: boolean;
       {!p && fetched.error && !netDown ? null : (
         <button
           type="button"
-          disabled={!p}
+          disabled={!p || !picked.length}
           onClick={() =>
             p &&
-            void run({ type: "library_install", from: p.source, agents: picked }, () => {
+            void run({ type: "skill_install", from: p.source, agents: picked }, () => {
               void qc.invalidateQueries({ queryKey: ["market"] });
               onClose();
             })
           }
           className="mt-6 h-11 w-full rounded-full bg-ink font-semibold text-bg active:scale-[0.98] disabled:opacity-40"
         >
-          {netDown && !p ? t.waitingConnection : p?.in_library ? t.updateAndKeep : picked.length ? t.installAndTurnOn(picked.length) : t.installLibraryOnly}
+          {netDown && !p ? t.waitingConnection : !picked.length ? t.pickAgent : picked.every((k) => present.includes(k)) ? t.updateAndKeep : t.installAndTurnOn(picked.length)}
         </button>
       )}
     </DetailSheet>

@@ -12,9 +12,11 @@ import type { Item } from "../ipc/bindings/Item";
 import type { HookFacts } from "../ipc/bindings/HookFacts";
 import type { AgentSummary } from "../ipc/bindings/AgentSummary";
 import { FChip } from "../components/FChip";
+import { AgentFilter } from "../components/AgentFilter";
 import { GroupToggle } from "../components/GroupToggle";
 import { DetailSheet, SheetSteps } from "../components/DetailSheet";
-import { formatCount, formatDate, formatMs, tildePath } from "../lib/format";
+import { formatCount, formatMs, tildePath } from "../lib/format";
+import { PathLink, PluginName } from "../components/PlaceLink";
 import { t } from "../strings";
 
 type StatusFilter = "all" | "broken" | "slow" | "off" | "gone";
@@ -202,19 +204,7 @@ export function Hooks() {
           {chip("slow", t.slow, count("slow"))}
           {chip("off", t.off, count("off"))}
           {chip("gone", t.gone, count("gone"))}
-          <span className="mx-1 h-5 w-px bg-rule" />
-          {agents
-            .filter((a) => live.some((h) => h.agents.includes(a.key)))
-            .map((a) => (
-              <FChip
-                key={a.key}
-                icon={<AgentLogo agent={a} size={14} />}
-                label={a.key === "agents_shared" ? t.sharedAgents : a.display_name}
-                count={live.filter((h) => h.agents.includes(a.key)).length}
-                active={agent === a.key}
-                onClick={() => setAgent(agent === a.key ? null : a.key)}
-              />
-            ))}
+          <AgentFilter agents={agents} items={live} value={agent} onChange={setAgent} />
           <div className="ml-auto flex items-center gap-3">
             <Segmented value={group} onChange={setGroup} />
           </div>
@@ -376,7 +366,7 @@ function cluster(list: Item[]): { key: string; items: Item[] }[] {
 const canRemove = (h: Item) => {
   const f = facts(h);
   const st = h.status.state;
-  return !!f && (f.switch === "stash" || f.switch === "native") && st !== "gone" && st !== "unreadable";
+  return !!f && (f.switch === "remove" || f.switch === "native") && st !== "gone" && st !== "unreadable";
 };
 
 const STATE_RANK: Record<string, number> = { broken: 4, slow: 3, off: 2, gone: 1 };
@@ -645,11 +635,12 @@ function HookSheet({
   const tm = item.usage?.timing;
   const { run } = useAction();
   const st = item.status.state;
-  const canSwitch = f && (f.switch === "stash" || f.switch === "native") && st !== "gone" && st !== "unreadable";
+  const canSwitch = f && f.switch === "native" && st !== "gone" && st !== "unreadable";
+  const removable = canRemove(item);
   const switchNote = f
     ? {
         native: t.switchNative,
-        stash: t.switchStash,
+        remove: t.switchRemove,
         plugin: t.switchPlugin,
         none: t.switchNone,
       }[f.switch]
@@ -684,28 +675,30 @@ function HookSheet({
           {st === "off" ? t.turnOn : t.turnOff}
         </button>
       ) : null}
-      {canSwitch ? (
+      {removable ? (
         <button
           type="button"
           title={t.removeHookNote}
           onClick={() => void run({ type: "hook_remove", ids: [item.id] }, onClose)}
-          className="ml-2 mt-4 h-10 rounded-full px-5 font-semibold text-danger ring-1 ring-rule hover:bg-danger-soft active:scale-[0.97]"
+          className={[canSwitch ? "ml-2" : "", "mt-4 h-10 rounded-full px-5 font-semibold text-danger ring-1 ring-rule hover:bg-danger-soft active:scale-[0.97]"].join(" ")}
         >
           {t.removeHook}
         </button>
       ) : null}
       {st === "gone" ? <p className="mt-4 rounded-row bg-sunk px-3 py-2.5 text-[13px] leading-relaxed text-ink-2">{t.goneHookNote}</p> : null}
       {needsAgent(item) ? <AgentRemoval items={[item, ...siblings.filter(needsAgent)]} agentName={agentName} /> : null}
-      {canSwitch && siblings.filter(canRemove).length ? (
+      {removable && siblings.filter(canRemove).length ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-[12.5px] text-ink-3">{t.eventsN(siblings.length + 1)}:</span>
-          <button
-            type="button"
-            onClick={() => void run({ type: "hook_set_enabled", ids: [item, ...siblings.filter(canRemove)].map((h) => h.id), on: st === "off" })}
-            className="h-8 rounded-full bg-bg px-3 text-[12.5px] font-semibold ring-1 ring-rule hover:bg-sunk active:scale-[0.97]"
-          >
-            {st === "off" ? t.turnOnAll : t.turnOffAll}
-          </button>
+          {canSwitch ? (
+            <button
+              type="button"
+              onClick={() => void run({ type: "hook_set_enabled", ids: [item, ...siblings.filter(canRemove)].map((h) => h.id), on: st === "off" })}
+              className="h-8 rounded-full bg-bg px-3 text-[12.5px] font-semibold ring-1 ring-rule hover:bg-sunk active:scale-[0.97]"
+            >
+              {st === "off" ? t.turnOnAll : t.turnOffAll}
+            </button>
+          ) : null}
           <button
             type="button"
             title={t.removeHookNote}
@@ -718,9 +711,7 @@ function HookSheet({
       ) : null}
       {tm ? (
         <dl className="mt-4 grid grid-cols-3 gap-x-6 gap-y-3">
-          <SheetStat label={t.colRuns} value={formatCount(Number(item.usage!.count))} />
           <SheetStat label={t.total} value={formatMs(Number(tm.total_ms))} />
-          <SheetStat label={t.colLastUsed} value={formatDate(item.usage?.last_used)} />
           <SheetStat label={t.p50} value={formatMs(tm.p50_ms)} />
           <SheetStat label={t.p95} value={formatMs(tm.p95_ms)} warn={tm.p95_ms > SLOW_P95_MS} />
           <SheetStat label={t.max} value={formatMs(tm.max_ms)} />
@@ -771,13 +762,13 @@ function HookSheet({
         ) : null}
         {f?.plugin ? (
           <div>
-            {t.plugin} {f.plugin.id}
+            {t.plugin} <PluginName id={f.plugin.id} />
             {f.plugin.enabled ? "" : ` (${t.status.off})`}
           </div>
         ) : null}
         {f?.project ? (
           <div>
-            {t.project} {tildePath(f.project)}
+            {t.project} <PathLink path={f.project}>{tildePath(f.project)}</PathLink>
           </div>
         ) : null}
         {item.status.state !== "gone" && switchNote ? <div>{switchNote}</div> : null}
