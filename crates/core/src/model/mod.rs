@@ -570,59 +570,6 @@ pub struct AgentRow {
     pub sessions: u32,
 }
 
-/// Numbers for one year's Wrapped card. Holds no repo names, paths or
-/// secrets: only counts, times, skill and command names, agent names.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct WrappedData {
-    pub year: i32,
-    /// Years with prompts, newest first.
-    pub years: Vec<i32>,
-    #[ts(type = "number")]
-    pub prompts: u64,
-    /// Local date of the first prompt in the year, `YYYY-MM-DD`.
-    pub first_day: Option<String>,
-    pub active_days: u32,
-    /// Local hour (0–23) with the most prompts.
-    pub peak_hour: Option<u8>,
-    /// Weekday with the most prompts, 0 = Monday.
-    pub top_weekday: Option<u8>,
-    pub longest_streak: u32,
-    pub busiest_day: Option<DayTotal>,
-    /// Most-run skill among skills last used in this year.
-    pub top_skill: Option<NameCount>,
-    /// Most-typed slash command in this year's transcripts.
-    pub top_command: Option<NameCount>,
-    /// Prompts per agent, most first.
-    pub agents: Vec<AgentShare>,
-    /// Claude Code has a companion. Its name stays private.
-    pub companion: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct DayTotal {
-    pub day: String,
-    pub prompts: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct NameCount {
-    pub name: String,
-    #[ts(type = "number")]
-    pub count: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct AgentShare {
-    pub agent: AgentKey,
-    pub name: String,
-    #[ts(type = "number")]
-    pub prompts: u64,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]

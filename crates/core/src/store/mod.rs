@@ -474,13 +474,6 @@ impl Store {
     }
 
     /// Rows of one transcript use kind: (name, last use ms, count). One row per transcript file.
-    pub fn uses(&self, kind: &str) -> Result<Vec<(String, Option<i64>, u64)>, AppError> {
-        let conn = self.conn();
-        let mut st = conn.prepare("SELECT name, last, count FROM t_uses WHERE kind = ?1").map_err(db_err)?;
-        let rows = st.query_map([kind], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? as u64))).map_err(db_err)?;
-        rows.collect::<Result<_, _>>().map_err(db_err)
-    }
-
     /// Sessions with prompts, per origin.
     pub fn session_counts(&self) -> Result<Vec<(String, u64)>, AppError> {
         let conn = self.conn();

@@ -76,13 +76,6 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M4 4.5l.7 8.6a1 1 0 001 .9h4.6a1 1 0 001-.9l.7-8.6" />
     </>
   ),
-  "/wrapped": (
-    <>
-      <rect x="2.5" y="5.5" width="11" height="3" rx="1" />
-      <path d="M3.5 8.5v4a1 1 0 001 1h7a1 1 0 001-1v-4M8 5.5v8" />
-      <path d="M8 5.5C7 3 4.5 2.5 4.5 4s3.5 1.5 3.5 1.5S11.5 5.5 11.5 4 9 3 8 5.5z" />
-    </>
-  ),
   "/history": (
     <>
       <path d="M2.75 8a5.25 5.25 0 101.6-3.8" />

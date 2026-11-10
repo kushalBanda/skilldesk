@@ -175,11 +175,6 @@ impl Core {
         })
     }
 
-    /// One year's numbers for the Wrapped card; `None` = newest year with prompts.
-    pub fn wrapped(&self, year: Option<i32>) -> Result<crate::model::WrappedData, AppError> {
-        crate::wrapped::wrapped(self, year)
-    }
-
     /// Text of the item's main file (SKILL.md for skills), capped at 256 KB.
     pub fn item_document(&self, id: &ItemId) -> Result<String, AppError> {
         let item = self

@@ -20,7 +20,6 @@ import { Memory } from "./screens/Memory";
 import { Sessions } from "./screens/Sessions";
 import { Secrets } from "./screens/Secrets";
 import { Cleanup } from "./screens/Cleanup";
-import { Wrapped } from "./screens/Wrapped";
 import { Settings } from "./screens/Settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandPalette } from "./components/CommandPalette";
@@ -40,7 +39,7 @@ export function App() {
   const scanning = useScanning();
   const startScan = useStartScan();
   useScanOnLaunch(overview.isSuccess ? overview.data.scanned_at !== null : undefined);
-  const built = new Set(["/", "/fixes", "/skills", "/plugins", "/hooks", "/mcp", "/history", "/marketplace", "/subagents", "/memory", "/sessions", "/secrets", "/cleanup", "/wrapped", "/settings"]);
+  const built = new Set(["/", "/fixes", "/skills", "/plugins", "/hooks", "/mcp", "/history", "/marketplace", "/subagents", "/memory", "/sessions", "/secrets", "/cleanup", "/settings"]);
   const others = nav.flatMap((s) => s.items).filter((i) => !built.has(i.to));
   // First run (DESIGN.md §5): the shell stays mounted (inert) under Welcome,
   // so nothing heavy mounts mid-motion.
@@ -101,7 +100,6 @@ export function App() {
               <Route path="/sessions" element={<Sessions />} />
               <Route path="/secrets" element={<Secrets />} />
               <Route path="/cleanup" element={<Cleanup />} />
-              <Route path="/wrapped" element={<Wrapped />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/history" element={<Padded><History /></Padded>} />
               {others.map((i) => (
