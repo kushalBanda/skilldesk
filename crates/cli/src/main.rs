@@ -61,13 +61,6 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// One year's Wrapped numbers (from the last scan). No repo names, no secrets.
-    Wrapped {
-        /// Default: the newest year with prompts.
-        year: Option<i32>,
-        #[arg(long)]
-        json: bool,
-    },
     /// List items of one kind (from the last scan), e.g. `skilldesk list skill`.
     List {
         kind: String,
@@ -294,31 +287,6 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn std::error::Error>> {
                     println!("Hooks        {} runs, {:.1} min, {} cancelled", h.runs, h.total_ms as f64 / 60000.0, h.cancelled);
                 }
                 println!("Scanned      {}", o.scanned_at.as_deref().unwrap_or("never"));
-            }
-        }
-        Command::Wrapped { year, json } => {
-            let w = core.wrapped(year)?;
-            if json {
-                println!("{}", serde_json::to_string_pretty(&w)?);
-            } else {
-                const DAYS: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-                println!("Year         {} (years: {:?})", w.year, w.years);
-                println!("Prompts      {} on {} active days, first {}", w.prompts, w.active_days, w.first_day.as_deref().unwrap_or("-"));
-                println!("Peak hour    {}", w.peak_hour.map(|h| format!("{h}:00")).unwrap_or("-".into()));
-                println!("Top day      {}", w.top_weekday.map(|d| DAYS[d as usize]).unwrap_or("-"));
-                println!("Streak       {} days", w.longest_streak);
-                if let Some(b) = &w.busiest_day {
-                    println!("Busiest day  {} ({} prompts)", b.day, b.prompts);
-                }
-                if let Some(s) = &w.top_skill {
-                    println!("Top skill    {} ({} runs)", s.name, s.count);
-                }
-                if let Some(c) = &w.top_command {
-                    println!("Top command  /{} ({}x)", c.name, c.count);
-                }
-                for a in &w.agents {
-                    println!("  {:<14} {:>6}", a.name, a.prompts);
-                }
             }
         }
         Command::Fixes { json } => {

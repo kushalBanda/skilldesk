@@ -19,7 +19,6 @@ pub mod settings;
 pub mod storage;
 pub mod store;
 pub mod watch;
-pub mod wrapped;
 
 pub use crate::core::Core;
 pub use env::Env;

@@ -79,8 +79,6 @@ pub fn run() {
             commands::secrets::secrets_list,
             commands::secrets::secret_ignore,
             commands::secrets::secret_reveal,
-            commands::wrapped::wrapped_data,
-            commands::wrapped::file_save,
             commands::settings::settings_get,
             commands::settings::agent_set_on,
             commands::settings::custom_agent_save,

@@ -19,7 +19,6 @@ import type { RuleTarget } from "./bindings/RuleTarget";
 import type { Session } from "./bindings/Session";
 import type { Secret } from "./bindings/Secret";
 import type { SearchHit } from "./bindings/SearchHit";
-import type { WrappedData } from "./bindings/WrappedData";
 import type { SettingsData } from "./bindings/SettingsData";
 import type { CustomAgent } from "./bindings/CustomAgent";
 import type { CliStatus } from "./bindings/CliStatus";
@@ -34,9 +33,6 @@ export const ipc = {
   memoryRuleTargets: () => invoke<RuleTarget[]>("memory_rule_targets"),
   storageGet: () => invoke<StorageReport>("storage_get"),
   storageRefresh: () => invoke<StorageReport>("storage_refresh"),
-  wrappedData: (year: number | null) => invoke<WrappedData>("wrapped_data", { year }),
-  /** Opens the save dialog in the core; false when the User cancels. */
-  fileSave: (png: Uint8Array, name: string) => invoke<boolean>("file_save", png, { headers: { "x-name": name } }),
   secretsList: () => invoke<Secret[]>("secrets_list"),
   secretIgnore: (id: string, on: boolean) => invoke<void>("secret_ignore", { id, on }),
   secretReveal: (id: string) => invoke<string>("secret_reveal", { id }),

@@ -10,7 +10,6 @@ pub mod secrets;
 pub mod sessions;
 pub mod settings;
 pub mod storage;
-pub mod wrapped;
 
 use skilldesk_core::AppError;
 

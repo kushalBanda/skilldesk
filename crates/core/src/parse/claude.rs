@@ -136,16 +136,3 @@ pub fn project_keys(env: &Env) -> Vec<PathBuf> {
     };
     parsed.projects.into_keys().map(PathBuf::from).collect()
 }
-
-/// Claude Code has a companion (`~/.claude.json` → `companion`). Reads
-/// nothing else: the name and personality stay private.
-pub fn has_companion(env: &Env) -> bool {
-    #[derive(serde::Deserialize)]
-    struct ClaudeJson {
-        companion: Option<serde::de::IgnoredAny>,
-    }
-    std::fs::read_to_string(env.home.join(".claude.json"))
-        .ok()
-        .and_then(|t| serde_json::from_str::<ClaudeJson>(&t).ok())
-        .is_some_and(|j| j.companion.is_some())
-}

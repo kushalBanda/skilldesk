@@ -15,7 +15,6 @@ export const qk = {
   storage: ["storage"] as const,
   scanning: ["scanning"] as const,
   scanStages: ["scan-stages"] as const,
-  wrapped: (year: number | null) => ["wrapped", year] as const,
   settings: ["settings"] as const,
   cli: ["cli"] as const,
 };
@@ -44,10 +43,6 @@ export function useStartScan() {
 
 export function useStorage() {
   return useQuery({ queryKey: qk.storage, queryFn: ipc.storageGet });
-}
-
-export function useWrapped(year: number | null) {
-  return useQuery({ queryKey: qk.wrapped(year), queryFn: () => ipc.wrappedData(year) });
 }
 
 export function useSettings() {
@@ -103,7 +98,6 @@ export function useScanOnLaunch(scannedBefore: boolean | undefined) {
     });
     const unlisten = listen<{ kinds: ItemKind[] }>("inventory-changed", (e) => {
       client.invalidateQueries({ queryKey: qk.overview });
-      client.invalidateQueries({ queryKey: ["wrapped"] });
       client.invalidateQueries({ queryKey: qk.settings });
       for (const kind of e.payload.kinds) client.invalidateQueries({ queryKey: qk.items(kind) });
       if (e.payload.kinds.includes("secret")) client.invalidateQueries({ queryKey: qk.secrets });
