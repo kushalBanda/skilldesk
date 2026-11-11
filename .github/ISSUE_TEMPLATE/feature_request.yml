@@ -1,0 +1,21 @@
+name: Feature or agent request
+description: Suggest a feature, or ask for support for another agent.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the job, not the solution. "I can't tell which MCP servers Cursor loads" beats "add an MCP tab".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+      description: How you picture SkillDesk handling it.
+  - type: textarea
+    id: agent
+    attributes:
+      label: For a new agent
+      description: Its name, where it keeps skills (e.g. `~/.myagent/skills`), and a link to its docs.
