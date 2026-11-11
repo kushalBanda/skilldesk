@@ -1,4 +1,4 @@
-//! Marketplace screen logic (ADR 0016): lists with an offline cache, download
+//! Marketplace screen logic: lists with an offline cache, download
 //! of one skill into SkillDesk's data folder, and update checks for skills
 //! installed from here. The install itself is the skill install action (a copy
 //! into each agent's folder); this module fetches, and records in SkillDesk's
@@ -335,7 +335,7 @@ pub async fn fetch(core: &Core, source: &str, skill_id: &str) -> Result<MarketFe
 
 #[cfg(test)]
 mod tests {
-    /// ADR 0016: no request at launch or during a scan. Opening the core,
+    /// No request at launch or during a scan. Opening the core,
     /// scanning and reading every screen's data sends nothing.
     #[test]
     fn marketplace_no_request_at_launch_or_scan() {
@@ -358,7 +358,7 @@ const AVATAR_LIMIT: u64 = 256 * 1024;
 
 /// The GitHub owner's avatar as a `data:` URL, cached in `<data>/avatars`.
 /// The page never loads remote images (CSP); this request is the Marketplace's
-/// own: `github.com/<owner>.png`, redirected to `avatars.githubusercontent.com` (ADR 0016).
+/// own: `github.com/<owner>.png`, redirected to `avatars.githubusercontent.com`.
 pub async fn avatar(core: &Core, owner: &str) -> Result<String, AppError> {
     github::check_repo(&format!("{owner}/x"))?;
     let dir = core.env.data_dir.join("avatars");

@@ -1,4 +1,4 @@
-//! Agent adapter registry (ADR 0003).
+//! Agent adapter registry.
 
 mod builtin;
 

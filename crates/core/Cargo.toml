@@ -21,7 +21,7 @@ memchr.workspace = true
 notify.workspace = true
 zip = { version = "7.3.0", default-features = false, features = ["deflate"] }
 similar = "3.2.1"
-# Marketplace only (ADR 0016): every use lives in src/net/.
+# Marketplace only: every use lives in src/net/.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2"] }
 tar = { version = "0.4.46", default-features = false }
 flate2 = "1.1.11"

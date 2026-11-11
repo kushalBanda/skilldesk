@@ -1,6 +1,6 @@
 import { PageHeader } from "../components/PageHeader";
 import { SearchField } from "../components/SearchField";
-// Marketplace (DESIGN.md §7.21, ADR 0016): skills.sh lists and search, install
+// Marketplace (DESIGN.md §7.21): skills.sh lists and search, install
 // straight into each picked agent's skills folder. The only screen that uses the network; requests
 // start when it opens and stop when it closes.
 import { useEffect, useMemo, useState } from "react";

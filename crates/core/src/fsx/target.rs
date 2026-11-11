@@ -1,8 +1,8 @@
-//! What sits at a write target, and what a caller may destroy there (ADR 0006).
+//! What sits at a write target, and what a caller may destroy there.
 //!
 //! Classified from `symlink_metadata` only — never `is_dir()`, which follows
 //! links and would send a directory symlink down a delete path. SkillDesk has
-//! no copy-mode deployments (ADR 0014), so `Recorded` only vouches for links.
+//! no copy-mode deployments, so `Recorded` only vouches for links.
 
 use std::path::{Path, PathBuf};
 

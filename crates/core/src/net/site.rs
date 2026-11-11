@@ -1,8 +1,8 @@
 //! Site-published skills: skills.sh lists a domain as the source, and the
 //! site serves its own `/.well-known/agent-skills/index.json` (or
 //! `/.well-known/skills/index.json`). Supports v1 file lists and v2
-//! `skill-md` / zip archive with SHA-256 digest. Only on an explicit Install
-//! (ADR 0016).
+//! `skill-md` / zip archive with SHA-256 digest. Only on an explicit
+//! Install.
 
 use super::{network, Http};
 use crate::error::{AppError, ErrorKind};

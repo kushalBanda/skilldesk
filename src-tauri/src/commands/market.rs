@@ -1,4 +1,4 @@
-//! Marketplace (ADR 0016). The only commands that use the network; each runs
+//! Marketplace. The only commands that use the network; each runs
 //! only because the Marketplace screen asked.
 use crate::AppState;
 use skilldesk_core::net::market::{self, MarketFetched, MarketList, Updates};

@@ -1,4 +1,4 @@
-//! Every network request SkillDesk makes (ADR 0016). Only the Marketplace
+//! Every network request the SkillDesk core makes. Only the Marketplace
 //! screen reaches this module: no scan stage, rule, tray item or CLI command
 //! calls it. HTTPS only, a fixed host list, redirects checked against it, a
 //! fixed User-Agent, no cookies, no tokens. Search text is never logged.
@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 /// Hosts any request may reach. A site-published skill adds its own domain
-/// for that one install (ADR 0016 "Hosts").
+/// for that one install.
 pub const HOSTS: &[&str] = &["skills.sh", "www.skills.sh", "codeload.github.com", "api.github.com", "raw.githubusercontent.com", "github.com", "avatars.githubusercontent.com"];
 
 const TIMEOUT: Duration = Duration::from_secs(30);

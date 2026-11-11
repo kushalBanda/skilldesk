@@ -1,4 +1,4 @@
-// Error kinds per ADR 0007.
+// Error kinds from crates/core/src/error.rs.
 import type { AppError } from "./bindings/AppError";
 import type { ErrorKind } from "./bindings/ErrorKind";
 

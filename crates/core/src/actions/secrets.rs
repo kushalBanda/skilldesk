@@ -1,8 +1,7 @@
 //! Redact a secret (architecture "Redact a secret"): every text file that
 //! holds the value gets the value replaced by its mask. Each file is copied to
 //! the Trash first (Undo puts it back), the result must still parse, and any
-//! failure rolls back every file. Agent databases are never written (ADR
-//! 0011); the plan lists them as not changed.
+//! failure rolls back every file. Agent databases are never written; the plan lists them as not changed.
 
 use super::{new_id, ActionPlan, ActionRequest, FileOp, MaskSpan, Untouched};
 use crate::core::Core;

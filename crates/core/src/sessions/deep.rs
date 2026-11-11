@@ -1,5 +1,5 @@
 //! Stage `Deep`: sessions of Codex, OpenCode, Cursor (editor and agent CLI)
-//! and Gemini CLI. Agent databases open read-only and immutable (ADR 0011):
+//! and Gemini CLI. Agent databases open read-only and immutable:
 //! SkillDesk never writes them, takes no lock and makes no `-wal`/`-shm`.
 
 use super::{SessionOrigin, SessionRow};

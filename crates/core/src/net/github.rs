@@ -1,7 +1,7 @@
 //! GitHub sources: one archive from codeload (no clone, no `git`); for repos
 //! whose archive is over 50 MB, the skill folder's own files from
 //! raw.githubusercontent.com. Commit
-//! lookups on api.github.com without an account (ADR 0016).
+//! lookups on api.github.com without an account.
 
 use super::{network, Http};
 use crate::error::{AppError, ErrorKind};
@@ -206,7 +206,7 @@ fn inner_path(raw: &[u8]) -> Result<Option<PathBuf>, AppError> {
 enum Kind {
     File,
     Dir,
-    /// Links and device files: never written (ADR 0016).
+    /// Links and device files: never written.
     Other,
     /// Archive bookkeeping (pax headers).
     Meta,

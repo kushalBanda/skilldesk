@@ -1,4 +1,4 @@
-//! SkillDesk core: all logic, no Tauri types (ADR 0002).
+//! SkillDesk core: all logic, no Tauri types.
 //! Used by the desktop app (`src-tauri`) and the `skilldesk` CLI (`crates/cli`).
 
 pub mod actions;

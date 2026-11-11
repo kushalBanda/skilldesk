@@ -1,4 +1,4 @@
-//! Skills inventory across every detected agent (ADR 0003, 0004).
+//! Skills inventory across every detected agent.
 //!
 //! - Each skills folder (global and per project) is scanned once and credited
 //!   to every agent that reads it.

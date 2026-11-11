@@ -1,4 +1,4 @@
-//! Staged scan (ADR 0008): stage `Config` (skills, hooks, …), then
+//! Staged scan: stage `Config` (skills, hooks, …), then
 //! `Transcripts` (hook run timing, Claude sessions), then `Deep` (other
 //! agents' sessions, from their databases opened read-only).
 

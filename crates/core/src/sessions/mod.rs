@@ -2,7 +2,7 @@
 //!
 //! Claude sessions come from the incremental transcript read (stage
 //! `Transcripts`); the other agents are read in stage `Deep`, their databases
-//! opened read-only and immutable (ADR 0011). Prompt text is masked
+//! opened read-only and immutable. Prompt text is masked
 //! ([`crate::secrets::mask`]) before it is stored.
 
 pub mod deep;

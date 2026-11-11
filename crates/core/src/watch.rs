@@ -1,4 +1,4 @@
-//! File watching (ADR 0009): agent folders are watched; a burst of changes
+//! File watching: agent folders are watched; a burst of changes
 //! collapses into one config rescan; SkillDesk's own writes are muted by path.
 //! Project config files are polled (they live all over the disk), and
 //! transcripts are read incrementally on a slow timer, never watched.

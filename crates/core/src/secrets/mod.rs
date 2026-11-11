@@ -1,6 +1,6 @@
 //! Secrets in agent history. Detectors find high-confidence shapes; each value
-//! is kept only as a salted hash plus its kind's known prefix (ADR 0010: no
-//! value is stored or sent to the UI). Every prompt text SkillDesk stores
+//! is kept only as a salted hash plus its kind's known prefix (no value
+//! is stored or sent to the UI). Every prompt text SkillDesk stores
 //! passes through [`mask`] first.
 //!
 //! A false positive only hides text. Values that look like examples or
@@ -321,7 +321,7 @@ pub struct SecretPlace {
 #[ts(export)]
 pub enum PlaceStore {
     TextFile,
-    /// An agent's database: never written (ADR 0011).
+    /// An agent's database: never written.
     AgentDb,
 }
 

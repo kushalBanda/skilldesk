@@ -1,4 +1,4 @@
-//! `user_version` step migrations (ADR 0011). A database from a newer SkillDesk is refused.
+//! `user_version` step migrations. A database from a newer SkillDesk is refused.
 
 use crate::error::{AppError, ErrorKind};
 use rusqlite::Connection;
@@ -71,7 +71,7 @@ fn step(conn: &Connection, from: u32) -> rusqlite::Result<()> {
         2 => conn.execute_batch(
             "CREATE TABLE fix_dismissals (fix_id TEXT PRIMARY KEY, evidence TEXT NOT NULL, at TEXT NOT NULL);",
         ),
-        // Incremental transcript reading (ADR 0008): per-file resume offsets and
+        // Incremental transcript reading: per-file resume offsets and
         // what each file contributed, so a rescan reads only appended lines.
         3 => conn.execute_batch(
             "
@@ -141,7 +141,7 @@ fn step(conn: &Connection, from: u32) -> rusqlite::Result<()> {
             DELETE FROM t_uses;
             ",
         ),
-        // Secret places: values only as salted hashes (ADR 0010). Every
+        // Secret places: values only as salted hashes. Every
         // transcript is read once more for secrets; Claude sessions are
         // rebuilt by that read (merging into old rows would count twice).
         6 => conn.execute_batch(

@@ -1,4 +1,4 @@
-//! Skill detection (ADR 0004). Rules:
+//! Skill detection. Rules:
 //! - a dir is a skill only with `SKILL.md` (or legacy `skill.md`);
 //! - README.md / CLAUDE.md never mark a skill;
 //! - recursive walks stop at a skill, skip `.git`/`node_modules`/`.hub`, and
