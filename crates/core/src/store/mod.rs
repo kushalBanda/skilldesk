@@ -1,4 +1,4 @@
-//! SQLite: cache + history (ADR 0005, 0011): one Mutex<Connection>, WAL, busy_timeout, foreign keys.
+//! SQLite: cache + history: one Mutex<Connection>, WAL, busy_timeout, foreign keys.
 
 mod migrations;
 mod secrets;
@@ -270,7 +270,7 @@ impl Store {
         for r in rows {
             merge_session(&tx, r)?;
         }
-        // Secrets in agent databases: listed, never written (ADR 0011).
+        // Secrets in agent databases: listed, never written.
         use crate::sessions::SessionOrigin as O;
         for o in origins.iter().filter(|o| matches!(o, O::Opencode | O::CursorEditor | O::CursorCli)) {
             tx.execute("DELETE FROM secret_places WHERE origin = ?1 AND store = 'db'", params![o.as_str()]).map_err(db_err)?;

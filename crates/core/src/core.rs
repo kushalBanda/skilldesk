@@ -29,7 +29,7 @@ pub struct Core {
     /// One scan at a time: a full scan refuses while one runs, a config rescan waits.
     pub(crate) scan_lock: Mutex<()>,
     /// Hook runs from the last transcript read, reused by config-only rescans.
-    /// Paths SkillDesk just wrote; the watcher ignores their echo (ADR 0009).
+    /// Paths SkillDesk just wrote; the watcher ignores their echo.
     pub(crate) muted: Mutex<Vec<(std::path::PathBuf, Instant)>>,
     pub(crate) transcripts: Mutex<Option<Arc<crate::parse::claude_runs::TranscriptStats>>>,
     /// Marketplace downloads waiting for Install, and where each came from.

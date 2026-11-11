@@ -1,5 +1,5 @@
 //! Secret places. A value is stored only as its salted hash, its kind and its
-//! known prefix (ADR 0010).
+//! known prefix.
 
 use super::{db_err, Store};
 use crate::error::{AppError, ErrorKind};

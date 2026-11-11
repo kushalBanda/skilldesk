@@ -1,4 +1,4 @@
-//! Menu-bar tray: fix count and the top 3 fixes, Open, Rescan, Quit (ADR 0012).
+//! Menu-bar tray: fix count and the top 3 fixes, Open, Rescan, Quit.
 
 use crate::{events, AppState};
 use skilldesk_core::rules::Fix;

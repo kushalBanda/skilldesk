@@ -1,5 +1,5 @@
 //! Byte spans inside JSON text, so edits touch only the entry they change and
-//! every other byte of the user's file stays as it was (ADR 0006). Tolerates
+//! every other byte of the user's file stays as it was. Tolerates
 //! `//` and `/* */` comments (JSONC settings files).
 
 #[derive(Debug, Clone, PartialEq, Eq)]

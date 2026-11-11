@@ -591,7 +591,7 @@ pub struct ScanProgress {
     pub done: bool,
 }
 
-/// An agent the User added in Settings (ADR 0003).
+/// An agent the User added in Settings.
 /// SkillDesk reads and links skills in its folder, nothing else.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]

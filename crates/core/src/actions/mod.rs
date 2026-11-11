@@ -1,4 +1,4 @@
-//! Every write goes through here (ADR 0006): plan → preflight → apply (re-check,
+//! Every write goes through here: plan → preflight → apply (re-check,
 //! write, roll back on failure) → History → Undo.
 
 mod hooks;

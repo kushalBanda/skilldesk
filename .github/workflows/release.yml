@@ -1,0 +1,89 @@
+name: Release
+
+# Push a tag like v0.1.0 to build a universal macOS DMG and a draft GitHub
+# Release with the signed updater files (latest.json, .app.tar.gz, .sig).
+# Publish the draft to ship it; the in-app updater reads the latest
+# published release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      # The updater compares versions, so the tag must match the app.
+      - name: Tag matches the app version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "tag $tag, package.json $pkg, tauri.conf.json $conf, Cargo.toml $cargo"
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$conf" ] && [ "$tag" = "$cargo" ] || { echo "::error::Bump every version to $tag before tagging"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+      - run: npm ci
+
+      # The app carries the skilldesk command (Settings > Command-line tool).
+      - name: Build the skilldesk command (universal)
+        run: |
+          cargo build --release --locked -p skilldesk-cli --target aarch64-apple-darwin
+          cargo build --release --locked -p skilldesk-cli --target x86_64-apple-darwin
+          mkdir -p src-tauri/binaries
+          lipo -create \
+            target/aarch64-apple-darwin/release/skilldesk \
+            target/x86_64-apple-darwin/release/skilldesk \
+            -output src-tauri/binaries/skilldesk-universal-apple-darwin
+
+      # With an Apple Developer ID in the repo secrets, the app is signed and
+      # notarized. Without one, it is ad-hoc signed and users clear the
+      # quarantine flag by hand (see README).
+      - name: Choose code signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Tauri tries to sign as soon as these exist, even when empty, so
+          # they reach the build only when the secrets are set.
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            # Heredoc form: a value may span lines (wrapped base64).
+            for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              { echo "$v<<EOF_$v"; echo "${!v}"; echo "EOF_$v"; } >> "$GITHUB_ENV"
+            done
+            echo "Developer ID signing and notarization on"
+          else
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "No Apple certificate: ad-hoc signing"
+          fi
+
+      # Pinned to a commit: this step holds the update-signing key.
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: SkillDesk ${{ github.ref_name }}
+          releaseBody: See CHANGELOG.md for what changed. Download the .dmg below.
+          releaseDraft: true
+          args: --target universal-apple-darwin --config src-tauri/tauri.release.conf.json

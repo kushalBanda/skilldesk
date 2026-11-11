@@ -11,3 +11,4 @@ src-tauri/gen/
 *.db
 *.db-wal
 *.db-shm
+src-tauri/binaries/

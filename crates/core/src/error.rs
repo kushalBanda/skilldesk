@@ -1,4 +1,4 @@
-//! Structured error returned across the IPC boundary (ADR 0007).
+//! Structured error returned across the IPC boundary.
 //!
 //! Serialized as `{"kind": "io", "message": "..."}` so the UI can branch on
 //! `kind` and still show a readable `message`. `details` is omitted when absent.
@@ -20,7 +20,7 @@ pub enum ErrorKind {
     /// Always carries `details.conflicts`.
     TargetConflict,
     Cancelled,
-    /// No connection, a timeout, or a marketplace host answered with an error (ADR 0016).
+    /// No connection, a timeout, or a marketplace host answered with an error.
     Network,
     Database,
     Internal,

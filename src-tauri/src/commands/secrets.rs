@@ -15,7 +15,7 @@ pub async fn secret_ignore(state: State<'_, AppState>, id: String, on: bool) -> 
     super::blocking(move || core.secret_ignore(&id, on)).await
 }
 
-/// The one command that returns a secret value (ADR 0010): only after Touch
+/// The one command that returns a secret value: only after Touch
 /// ID or the user's password. The UI hides it again after 10 s.
 #[tauri::command]
 pub async fn secret_reveal(state: State<'_, AppState>, id: String) -> Result<String, AppError> {

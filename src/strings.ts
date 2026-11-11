@@ -1,4 +1,4 @@
-// All UI copy in one place (ADR 0002). Fixed titles only (DESIGN.md §1).
+// All UI copy in one place. Fixed titles only (DESIGN.md §1).
 import type { ItemKind } from "./ipc/bindings/ItemKind";
 
 export type NavItem = { to: string; label: string };
@@ -43,7 +43,7 @@ export const kindLabel: Record<ItemKind, string> = {
 };
 
 export const t = {
-  // Marketplace (DESIGN.md §7.21, ADR 0016)
+  // Marketplace (DESIGN.md §7.21)
   marketplace: "Marketplace",
   marketNote: "This screen uses the network. It reads lists from skills.sh and downloads from GitHub. It sends the search text, nothing else from this Mac.",
   marketFooter: "Installs as counted by skills.sh. SkillDesk does not rank or review skills.",
@@ -575,6 +575,18 @@ export const t = {
   cliOnPath: "The shell start file already adds this folder to PATH.",
   cliExample: "Prints the inventory and the Fix list as JSON.",
   copyLine: "Copy line",
+  appUpdateTitle: "App updates",
+  appUpdateLead: "SkillDesk asks GitHub Releases for a newer version once per launch. It sends nothing about this Mac. Every update is signed and checked before it installs.",
+  appUpdateAuto: "Check on launch",
+  appUpdateCheck: "Check now",
+  appUpdateChecking: "Checking…",
+  appUpdateCurrent: (v: string) => `SkillDesk ${v} is the latest version.`,
+  appUpdateReady: (v: string) => `SkillDesk ${v} is ready to install.`,
+  appUpdateInstall: "Install and restart",
+  appUpdateInstalling: (pct: number | null) => (pct === null ? "Installing…" : `Downloading ${pct}%`),
+  appUpdateFailed: "Could not reach GitHub Releases. Try again later.",
+  appUpdateNotes: "What's new",
+  appUpdateBadge: "Update ready",
 
   // Cleanup (DESIGN.md §7.12)
   cleanupTitle: "Cleanup",

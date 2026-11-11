@@ -13,7 +13,7 @@ pub mod storage;
 
 use skilldesk_core::AppError;
 
-/// Run blocking core work off the IPC thread (ADR 0008).
+/// Run blocking core work off the IPC thread.
 pub async fn blocking<T, F>(f: F) -> Result<T, AppError>
 where
     T: Send + 'static,

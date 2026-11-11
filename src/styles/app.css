@@ -4,7 +4,7 @@
 @import "./tokens.css";
 
 /* Tailwind reads DESIGN.md tokens only: default palette and radii are cleared
-   so classes cannot invent colours or radii (ADR 0002). */
+   so classes cannot invent colours or radii. */
 @theme inline {
   --color-*: initial;
   --color-bg: var(--bg);

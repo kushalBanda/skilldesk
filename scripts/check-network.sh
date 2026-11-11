@@ -1,17 +1,18 @@
 #!/bin/sh
-# ADR 0016 (amends 0010, 0013): network crates and where they may be used.
+# Network crates and where they may be used. SkillDesk is local by default:
+# only the Marketplace (crates/core/src/net) and the app updater go online.
 set -eu
 fail=0
 
 tree=$(cargo tree --workspace -e normal --prefix none)
-for c in ureq git2 tauri-plugin-updater keyring; do
+for c in ureq git2 keyring; do
   if echo "$tree" | grep -q "^$c v"; then echo "banned crate: $c"; fail=1; fi
 done
 
-# reqwest only in skilldesk-core; hyper only through reqwest.
+# reqwest only in skilldesk-core and the updater plugin; hyper only through reqwest.
 users=$(cargo tree -i reqwest -e normal --depth 1 --prefix none 2>/dev/null | tail -n +2 | awk '{print $1}' | sort -u)
 for u in $users; do
-  [ "$u" = "skilldesk-core" ] || { echo "reqwest used by $u"; fail=1; }
+  case "$u" in skilldesk-core|tauri-plugin-updater) ;; *) echo "reqwest used by $u"; fail=1 ;; esac
 done
 parents=$(cargo tree -i hyper -e normal --depth 1 --prefix none 2>/dev/null | tail -n +2 | awk '{print $1}' | sort -u)
 for p in $parents; do

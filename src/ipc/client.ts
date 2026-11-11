@@ -58,7 +58,7 @@ export const ipc = {
   pickFolder: () => invoke<string | null>("pick_folder"),
   cliStatus: () => invoke<CliStatus>("cli_status"),
   cliInstall: () => invoke<CliStatus>("cli_install"),
-  // Network (ADR 0016): Marketplace screen only.
+  // Network: Marketplace screen only.
   marketBoard: (board: Board) => invoke<MarketList>("market_board", { board }),
   marketSearch: (query: string) => invoke<MarketList>("market_search", { query }),
   marketUpdates: (check: boolean) => invoke<Updates>("market_updates", { check }),
