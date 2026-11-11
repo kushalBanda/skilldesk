@@ -97,28 +97,6 @@ Add the agent's logo to `src/assets/agents` if one is available under a license 
 - Say what you tested and how.
 - Add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for anything a user would notice.
 
-## Releases (maintainers)
-
-1. Bump `version` in `package.json`, `Cargo.toml` (workspace) and `src-tauri/tauri.conf.json`.
-2. Move the `Unreleased` notes in `CHANGELOG.md` under the new version.
-3. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
-4. The Release workflow builds a universal DMG and opens a draft GitHub Release with the updater files.
-5. Check the draft, paste the changelog section into it, and publish. Installed apps see the update on their next launch.
-
-The workflow needs these repository secrets:
-
-| Secret | Purpose |
-| --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Signs updates. Contents of `~/.tauri/skilldesk.key`. |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password. Empty if the key has none. |
-| `APPLE_CERTIFICATE` | Developer ID Application certificate, `.p12` as base64. Optional. |
-| `APPLE_CERTIFICATE_PASSWORD` | The `.p12` password. |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Notarization: Apple ID, an app-specific password, and the team ID. |
-
-Without the Apple secrets the build is ad-hoc signed. With them it's signed and notarized, so it opens without a Gatekeeper warning.
-
-Losing the updater key means installed apps can't verify new updates. Keep a backup of `~/.tauri/skilldesk.key` somewhere safe.
-
 ## License
 
 By contributing, you agree your work is released under the [MIT License](LICENSE).
