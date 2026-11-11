@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch or PR cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     runs-on: macos-latest
@@ -21,13 +26,13 @@ jobs:
         run: mkdir -p dist
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Network crates only in core/net (ADR 0016)
+      - name: Network crates only in core/net and the updater
         run: ./scripts/check-network.sh
       - name: Bindings are committed and current
         run: git diff --exit-code -- src/ipc/bindings
 
   frontend:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
