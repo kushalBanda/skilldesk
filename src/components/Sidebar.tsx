@@ -5,6 +5,7 @@ import { nav, t } from "../strings";
 import { useFixes } from "../ipc/queries";
 import { ScanButton } from "./TopBar";
 import { markSidebar } from "./BackLink";
+import { useAppUpdate } from "../lib/updates";
 
 // One glyph per screen: 16px, 1.5 stroke, drawn on the same grid as the rest of the app's icons.
 const ICONS: Record<string, ReactNode> = {
@@ -121,6 +122,7 @@ const fold = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 export function Sidebar() {
   const fixes = useFixes();
   const fixCount = fixes.data?.length ?? 0;
+  const { update } = useAppUpdate();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -203,6 +205,7 @@ export function Sidebar() {
         <NavLink to="/settings" title="⌘," onClick={markSidebar} className={(s) => row(s) + " flex-1"}>
           <Glyph to="/settings" />
           <span className="flex-1">{t.settingsNav}</span>
+          {update ? <span className="size-2 rounded-full bg-accent" title={t.appUpdateBadge} aria-label={t.appUpdateBadge} /> : null}
           <span className="text-[12px] text-ink-3">⌘,</span>
         </NavLink>
         <ScanButton />

@@ -1,4 +1,4 @@
-//! Tauri shell. Commands are thin wrappers over `skilldesk-core` (ADR 0002).
+//! Tauri shell. Commands are thin wrappers over `skilldesk-core`.
 
 mod commands;
 mod events;
@@ -10,7 +10,7 @@ use tauri::Manager;
 
 pub struct AppState {
     pub core: Arc<Core>,
-    /// Kept alive for the app's lifetime (ADR 0009); started again when the
+    /// Kept alive for the app's lifetime; started again when the
     /// agent list changes in Settings.
     watcher: std::sync::Mutex<Option<skilldesk_core::watch::Watcher>>,
 }
@@ -33,6 +33,8 @@ fn start_watcher(core: &Arc<Core>, app: &tauri::AppHandle) -> Option<skilldesk_c
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let core = Core::open(Env::from_os())?;
             let watcher = start_watcher(&core, app.handle());
@@ -41,7 +43,7 @@ pub fn run() {
             tray::refresh(app.handle());
             Ok(())
         })
-        // Closing the window keeps SkillDesk in the menu bar (ADR 0012).
+        // Closing the window keeps SkillDesk in the menu bar.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();

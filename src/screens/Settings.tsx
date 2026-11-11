@@ -10,6 +10,7 @@ import type { AgentSetting } from "../ipc/bindings/AgentSetting";
 import type { CliStatus } from "../ipc/bindings/CliStatus";
 import { tildePath } from "../lib/format";
 import { t } from "../strings";
+import { installAndRestart, useAppUpdate } from "../lib/updates";
 
 const btn = "h-8 shrink-0 rounded-full bg-bg px-3 text-[13px] font-semibold ring-1 ring-rule hover:bg-sunk active:scale-[0.97] disabled:opacity-50";
 const primary = "h-8 shrink-0 rounded-full bg-ink px-4 text-[13px] font-semibold text-bg active:scale-[0.97] disabled:opacity-50";
@@ -36,6 +37,7 @@ export function Settings() {
             <Cli onError={setError} />
           </>
         ) : null}
+        <AppUpdates />
       </div>
     </div>
   );
@@ -257,6 +259,60 @@ function Cli({ onError }: { onError: (e: string | null) => void }) {
         <code className="selectable rounded-input bg-sunk px-2 py-1 font-mono text-[12.5px]">skilldesk scan --json</code>
         <span className="text-[13px] text-ink-2">{t.cliExample}</span>
       </div>
+    </section>
+  );
+}
+
+function AppUpdates() {
+  const u = useAppUpdate();
+  const [pct, setPct] = useState<number | null | undefined>(undefined);
+  const [failed, setFailed] = useState<string | null>(null);
+  const installing = pct !== undefined;
+  const checkNow = () => {
+    setFailed(null);
+    u.checkNow().catch(() => setFailed(t.appUpdateFailed));
+  };
+  const install = async () => {
+    if (!u.update) return;
+    setFailed(null);
+    setPct(null);
+    try {
+      await installAndRestart(u.update, setPct);
+    } catch (e) {
+      setPct(undefined);
+      setFailed(getErrorMessage(e, t.appUpdateFailed));
+    }
+  };
+  const status = u.update ? t.appUpdateReady(u.update.version) : u.checked ? t.appUpdateCurrent(__APP_VERSION__) : null;
+  return (
+    <section className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <h2 className={h2}>{t.appUpdateTitle}</h2>
+        {u.update ? <span className="rounded-full bg-ok-soft px-2 text-[11.5px] font-semibold leading-5 text-ok">{t.appUpdateBadge}</span> : null}
+      </div>
+      <p className="m-0 text-[13px] text-ink-2">{t.appUpdateLead}</p>
+      <div className="flex items-center gap-4 border-t border-rule py-3">
+        <span className="min-w-0 flex-1 text-[13px] text-ink-2">{failed ?? status ?? `SkillDesk ${__APP_VERSION__}`}</span>
+        <label className="flex items-center gap-2 text-[13px] text-ink-2">
+          {t.appUpdateAuto}
+          <Switch on={u.auto} label={t.appUpdateAuto} onChange={u.setAuto} />
+        </label>
+        {u.update ? (
+          <button type="button" className={primary} disabled={installing} onClick={() => void install()}>
+            {installing ? t.appUpdateInstalling(pct ?? null) : t.appUpdateInstall}
+          </button>
+        ) : (
+          <button type="button" className={btn} disabled={u.checking} onClick={checkNow}>
+            {u.checking ? t.appUpdateChecking : t.appUpdateCheck}
+          </button>
+        )}
+      </div>
+      {u.update?.body ? (
+        <details>
+          <summary className="cursor-default py-1 text-[13px] font-semibold text-ink-2">{t.appUpdateNotes}</summary>
+          <p className="selectable m-0 whitespace-pre-wrap text-[13px] text-ink-2">{u.update.body}</p>
+        </details>
+      ) : null}
     </section>
   );
 }

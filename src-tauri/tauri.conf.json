@@ -40,5 +40,11 @@
     "macOS": {
       "minimumSystemVersion": "12.0"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE2RjRDMjBDMkM4OEM1MjMKUldRanhZZ3NETUwwcGduSktuZFF3SE15Vm1qaGFNd040b3NNUk5YUk12RDZLcS9GcGUyMXIzeHkK",
+      "endpoints": ["https://github.com/kushalBanda/skilldesk/releases/latest/download/latest.json"]
+    }
   }
 }
