@@ -41,11 +41,15 @@ jobs:
       - run: npm ci
 
       # The app carries the skilldesk command (Settings > Command-line tool).
+      # A universal build compiles the app once per arch, and each pass looks
+      # for the sidecar under its own target triple.
       - name: Build the skilldesk command (universal)
         run: |
           cargo build --release --locked -p skilldesk-cli --target aarch64-apple-darwin
           cargo build --release --locked -p skilldesk-cli --target x86_64-apple-darwin
           mkdir -p src-tauri/binaries
+          cp target/aarch64-apple-darwin/release/skilldesk src-tauri/binaries/skilldesk-aarch64-apple-darwin
+          cp target/x86_64-apple-darwin/release/skilldesk src-tauri/binaries/skilldesk-x86_64-apple-darwin
           lipo -create \
             target/aarch64-apple-darwin/release/skilldesk \
             target/x86_64-apple-darwin/release/skilldesk \
