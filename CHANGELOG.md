@@ -2,14 +2,6 @@
 
 All notable changes to SkillDesk are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org).
 
-## Unreleased
-
-### Added
-
-- App updates: SkillDesk checks GitHub Releases once per launch and installs signed updates from Settings. The check can be turned off.
-- The release build carries the `skilldesk` command, installable from Settings.
-- README, contributing guide, security policy, code of conduct, and issue templates.
-
 ## 0.1.0
 
 First public version.
@@ -25,4 +17,7 @@ First public version.
 - Cleanup: disk use by agent, with old caches and logs moved to the Trash.
 - History and Undo for every change.
 - Menu-bar tray with the fix count and top fixes.
-- `skilldesk` command-line tool with JSON output.
+- `skilldesk` command-line tool with JSON output, bundled with the app and installable from Settings.
+- App updates: SkillDesk checks GitHub Releases once per launch and installs signed updates from Settings. The check can be turned off.
+- One-line install: `curl -fsSL https://raw.githubusercontent.com/kushalBanda/skilldesk/main/install.sh | bash`.
+- README, contributing guide, security policy, code of conduct, and issue templates.
