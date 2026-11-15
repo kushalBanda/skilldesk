@@ -13,7 +13,11 @@ A Mac app that reads the skills, plugins, hooks, MCP servers, memory, sessions, 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![macOS 12+](https://img.shields.io/badge/macOS-12%2B-black?logo=apple)
 
-**[Download for macOS](https://github.com/kushalBanda/skilldesk/releases/latest)**
+```sh
+curl -fsSL https://raw.githubusercontent.com/kushalBanda/skilldesk/main/install.sh | bash
+```
+
+Or **[download the DMG](https://github.com/kushalBanda/skilldesk/releases/latest)** ([why it says "damaged"](#install))
 
 [Features](#features) · [Agents](#supported-agents) · [Install](#install) · [CLI](#command-line-tool) · [Privacy](#privacy-and-safety)
 
