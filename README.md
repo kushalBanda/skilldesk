@@ -107,16 +107,26 @@ Agent missing? Add it in **Settings > Custom agents** by pointing at its skills 
 
 macOS 12 or later, Apple silicon or Intel.
 
-1. Download `SkillDesk_<version>_universal.dmg` from the [latest release](https://github.com/kushalBanda/skilldesk/releases/latest).
-2. Drag SkillDesk to Applications and open it.
-3. The first scan takes about two minutes. Secrets and Cursor's database finish in the background.
+```sh
+curl -fsSL https://raw.githubusercontent.com/kushalBanda/skilldesk/main/install.sh | bash
+```
 
-> [!NOTE]
-> Until SkillDesk is notarized by Apple, macOS may say the app "is damaged". It's unsigned, not damaged. Clear the download flag once:
->
-> ```sh
-> xattr -cr /Applications/SkillDesk.app
-> ```
+This installs the latest release into Applications and opens it. Run it again to update. The first scan takes about two minutes. Secrets and Cursor's database finish in the background.
+
+<details>
+<summary><b>Install from the DMG instead</b></summary>
+
+<br>
+
+1. Download `SkillDesk_<version>_universal.dmg` from the [latest release](https://github.com/kushalBanda/skilldesk/releases/latest).
+2. Drag SkillDesk to Applications.
+3. SkillDesk isn't notarized by Apple yet, so macOS may say the app "is damaged". It's unsigned, not damaged. Clear the download flag once, then open it:
+
+```sh
+xattr -cr /Applications/SkillDesk.app
+```
+
+</details>
 
 SkillDesk updates itself from GitHub Releases. Updates are signed, and the app refuses one that doesn't verify.
 
